@@ -162,7 +162,6 @@ function renderParticles() {
   const radius = config.particles.radius;
   const color = config.palette.points;
   const alpha = config.palette.pointsAlpha;
-  const diameter = radius * 2;
 
   ctx.fillStyle = color;
   ctx.globalAlpha = alpha;
@@ -429,9 +428,11 @@ function renderLoop() {
 function positionLogoOverlays() {
   if (!logoPositions || logoElements.length === 0) return;
 
-  const logoHeight = canvas.height * config.layout.logoHeight;
-  const logoWidth = canvas.width * config.layout.logoWidth;
-  const logoPadding = canvas.width * config.layout.logoPadding;
+  const isMobile = canvas.width < 768;
+  const logoScale = isMobile ? 1.8 : 1;
+  const logoHeight = canvas.height * config.layout.logoHeight * logoScale;
+  const logoWidth = canvas.width * config.layout.logoWidth * logoScale;
+  const logoPadding = canvas.width * config.layout.logoPadding * (isMobile ? 1.5 : 1);
   const totalLogosWidth = config.logos.length * logoWidth + (config.logos.length - 1) * logoPadding;
   const logoStartX = (canvas.width - totalLogosWidth) / 2;
   const logoY = canvas.height * (0.42 + config.layout.nameScale / 2 + config.layout.logoGap);

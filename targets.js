@@ -171,10 +171,12 @@ export async function generateTargets(config, canvasWidth, canvasHeight, particl
   // Sample name targets
   const nameTargets = sampleTextTargets(name, font, nameParticles, canvasWidth, canvasHeight, layout);
 
-  // Calculate logo positions
-  const logoHeight = canvasHeight * layout.logoHeight;
-  const logoWidth = canvasWidth * layout.logoWidth;
-  const logoPadding = canvasWidth * layout.logoPadding;
+  // Calculate logo positions (scale up on mobile for usability)
+  const isMobile = canvasWidth < 768;
+  const logoScale = isMobile ? 1.8 : 1;
+  const logoHeight = canvasHeight * layout.logoHeight * logoScale;
+  const logoWidth = canvasWidth * layout.logoWidth * logoScale;
+  const logoPadding = canvasWidth * layout.logoPadding * (isMobile ? 1.5 : 1);
   const totalLogosWidth = logos.length * logoWidth + (logos.length - 1) * logoPadding;
   const logoStartX = (canvasWidth - totalLogosWidth) / 2;
   const logoY = canvasHeight * (0.42 + layout.nameScale / 2 + layout.logoGap);
