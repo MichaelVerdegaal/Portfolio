@@ -162,15 +162,18 @@ function renderParticles() {
   const radius = config.particles.radius;
   const color = config.palette.points;
   const alpha = config.palette.pointsAlpha;
+  const diameter = radius * 2;
 
   ctx.fillStyle = color;
   ctx.globalAlpha = alpha;
 
+  // Batch all particles into a single path for performance
+  ctx.beginPath();
   for (const p of particles) {
-    ctx.beginPath();
+    ctx.moveTo(p.x + radius, p.y);
     ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-    ctx.fill();
   }
+  ctx.fill();
 
   ctx.globalAlpha = 1;
 }
@@ -189,8 +192,8 @@ async function startReveal() {
   // Cancel idle animation
   if (animationId) cancelAnimationFrame(animationId);
 
-  // Generate targets
-  const result = await generateTargets(config, canvas.width, canvas.height);
+  // Generate targets matching actual particle count
+  const result = await generateTargets(config, canvas.width, canvas.height, particles.length);
   targetPositions = result.targets;
   logoPositions = result.logoPositions;
 
@@ -300,7 +303,10 @@ function trainFrame() {
   // Run mini-batch gradient steps
   for (let s = 0; s < stepsPerFrame; s++) {
     const { batchInput, batchTargets, batchSize } = getMiniBatch();
-    lastLoss = backward(network, batchInput, batchTargets, batchSize, lr);
+    // Cosine decay learning rate: starts high for the dramatic lurch, decays for sharp convergence
+    const progress = Math.min(1, trainingStep / (config.reveal.durationSeconds * 60 * stepsPerFrame));
+    const currentLr = lr * (0.3 + 0.7 * Math.cos(progress * Math.PI * 0.5));
+    lastLoss = backward(network, batchInput, batchTargets, batchSize, currentLr);
     // Exponential moving average for stable convergence detection
     emaLoss = emaLoss === Infinity ? lastLoss : 0.9 * emaLoss + 0.1 * lastLoss;
     trainingStep++;
@@ -444,7 +450,10 @@ function positionLogoOverlays() {
 function showStaticFallback() {
   canvas.style.display = 'none';
   document.getElementById('reveal-btn').style.display = 'none';
+  // Hide the sr-only content to avoid duplicate landmarks
+  document.getElementById('sr-content').style.display = 'none';
   const fallback = document.getElementById('static-fallback');
+  fallback.setAttribute('role', 'main');
   fallback.style.display = 'flex';
 }
 
