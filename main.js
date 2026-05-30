@@ -85,6 +85,14 @@ function handleResize() {
     p.y *= scaleY;
   }
 
+  // Also scale resolved positions if in resolved state
+  if (resolvedPositions) {
+    for (const p of resolvedPositions) {
+      p.x *= scaleX;
+      p.y *= scaleY;
+    }
+  }
+
   // If resolved, re-position logo overlays
   if (state === 'resolved') {
     positionLogoOverlays();
