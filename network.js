@@ -1,16 +1,33 @@
 /**
  * Neural network module: MLP with Random Fourier Features and Adam optimiser.
- * Hand-written forward pass and backpropagation — no ML libraries.
- * Uses Float32Array for performance in browser tight loops.
+ * Hand-written forward pass and backpropagation, no ML libraries.
+ *
+ * Performance notes:
+ *   - Every Float32Array used in the per-frame hot path (training and render
+ *     forward passes, gradients, activation caches) is preallocated once and
+ *     reused. The previous version allocated a dozen typed arrays per backward
+ *     call, which both wasted cycles and produced GC stutter on every frame.
+ *   - Buffers are sized lazily to the batch size first seen, then reused. The
+ *     render pass (all particles) and the training pass (a mini-batch) keep
+ *     separate buffer sets because their batch sizes differ.
  */
+
+const ADAM_BETA1 = 0.9;
+const ADAM_BETA2 = 0.999;
+const ADAM_EPS = 1e-8;
 
 /**
  * Create a random matrix for Fourier feature encoding.
- * Projects input_dim -> num_frequencies, then sin/cos gives 2*num_frequencies features.
+ * Projects inputDim -> numFrequencies, then sin/cos gives 2*numFrequencies features.
+ *
+ * @param {number} inputDim Dimension of the raw per-particle input code.
+ * @param {number} numFrequencies Number of random frequencies to project onto.
+ * @param {number} [scale=8.0] Std of the Gaussian frequencies. Higher = sharper
+ *   detail the network can represent (the main knob for crisp glyphs), at the
+ *   cost of noisier high-frequency output. 6 to 10 works well for text.
+ * @returns {{B: Float32Array, inputDim: number, numFrequencies: number, outputDim: number}}
  */
-export function createFourierMatrix(inputDim, numFrequencies) {
-  // Sample from normal distribution, scaled for good frequency coverage
-  const scale = 8.0;
+export function createFourierMatrix(inputDim, numFrequencies, scale = 8.0) {
   const B = new Float32Array(inputDim * numFrequencies);
   for (let i = 0; i < B.length; i++) {
     const u1 = Math.random();
@@ -22,8 +39,12 @@ export function createFourierMatrix(inputDim, numFrequencies) {
 
 /**
  * Encode a batch of input codes using random Fourier features.
- * inputs: Float32Array [batchSize × inputDim], row-major
- * Returns Float32Array [batchSize × (numFrequencies * 2)]
+ * Run once at setup, so allocation here is fine.
+ *
+ * @param {object} fourier Matrix from createFourierMatrix.
+ * @param {Float32Array} inputs Row-major [batchSize x inputDim].
+ * @param {number} batchSize Number of input codes.
+ * @returns {Float32Array} Row-major [batchSize x (numFrequencies * 2)].
  */
 export function fourierEncode(fourier, inputs, batchSize) {
   const { B, inputDim, numFrequencies, outputDim } = fourier;
@@ -46,9 +67,13 @@ export function fourierEncode(fourier, inputs, batchSize) {
 
 /**
  * Create an MLP with the specified architecture.
+ *
+ * @param {{inputDim:number, fourierFeatures:number, hiddenLayers:number[], activation:string}} config
+ * @returns {object} Network state with layers, Adam moments and scratch holders.
  */
 export function createNetwork(config) {
-  const { inputDim, fourierFeatures, hiddenLayers, activation } = config;
+  const { fourierFeatures, hiddenLayers } = config;
+  const activation = config.activation === 'relu' ? 'relu' : 'tanh';
   const fourierOutputDim = fourierFeatures * 2;
   const layerSizes = [fourierOutputDim, ...hiddenLayers, 2]; // 2 outputs (x, y)
 
@@ -56,19 +81,16 @@ export function createNetwork(config) {
   for (let l = 0; l < layerSizes.length - 1; l++) {
     const fanIn = layerSizes[l];
     const fanOut = layerSizes[l + 1];
-    // Xavier initialization
-    const scale = Math.sqrt(2.0 / (fanIn + fanOut));
+    const scale = Math.sqrt(2.0 / (fanIn + fanOut)); // Xavier
     const weights = new Float32Array(fanIn * fanOut);
-    const biases = new Float32Array(fanOut);
     for (let i = 0; i < weights.length; i++) {
       const u1 = Math.random();
       const u2 = Math.random();
       weights[i] = scale * Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
     }
-
     layers.push({
       weights,
-      biases,
+      biases: new Float32Array(fanOut),
       fanIn,
       fanOut,
       // Adam state
@@ -76,53 +98,104 @@ export function createNetwork(config) {
       vW: new Float32Array(fanIn * fanOut),
       mB: new Float32Array(fanOut),
       vB: new Float32Array(fanOut),
+      // Preallocated gradients (sized once, reused every backward)
+      dW: new Float32Array(fanIn * fanOut),
+      dB: new Float32Array(fanOut),
     });
   }
 
-  return { layers, activation, layerSizes, t: 0 };
+  const maxFan = Math.max(...layerSizes);
+
+  return {
+    layers,
+    activation,
+    layerSizes,
+    maxFan,
+    t: 0,
+    // Lazily sized scratch for the render pass (batch = particle count).
+    _render: { batch: 0, buffers: null },
+    // Lazily sized scratch for the training pass (batch = mini-batch size).
+    _train: { batch: 0, pre: null, act: null, dA: null, dB2: null },
+  };
 }
 
 /**
- * Forward pass (render-only, no gradient storage needed).
- * Returns Float32Array [batchSize × 2] of tanh-bounded outputs.
+ * Ensure render scratch buffers exist for the given batch size.
+ * @param {object} network
+ * @param {number} batchSize
+ */
+function ensureRenderBuffers(network, batchSize) {
+  const r = network._render;
+  if (r.batch >= batchSize && r.buffers) return;
+  const buffers = [];
+  for (const layer of network.layers) {
+    buffers.push(new Float32Array(batchSize * layer.fanOut));
+  }
+  r.batch = batchSize;
+  r.buffers = buffers;
+}
+
+/**
+ * Ensure training scratch buffers exist for the given batch size.
+ * @param {object} network
+ * @param {number} batchSize
+ */
+function ensureTrainBuffers(network, batchSize) {
+  const tr = network._train;
+  if (tr.batch >= batchSize && tr.pre) return;
+  const pre = [];
+  const act = [];
+  for (const layer of network.layers) {
+    pre.push(new Float32Array(batchSize * layer.fanOut));
+    act.push(new Float32Array(batchSize * layer.fanOut));
+  }
+  tr.batch = batchSize;
+  tr.pre = pre;
+  tr.act = act;
+  // Two ping-pong buffers for the back-propagated gradient wrt activations.
+  tr.dA = new Float32Array(batchSize * network.maxFan);
+  tr.dB2 = new Float32Array(batchSize * network.maxFan);
+}
+
+/**
+ * Forward pass for rendering only (no gradient caches).
+ * Writes into preallocated buffers and returns the final one. Do not mutate
+ * the returned array; copy out the values you need.
+ *
+ * @param {object} network
+ * @param {Float32Array} input Row-major [batchSize x fourierDim].
+ * @param {number} batchSize
+ * @returns {Float32Array} Row-major [batchSize x 2] of tanh-bounded outputs.
  */
 export function forwardRender(network, input, batchSize) {
-  const { layers, activation } = network;
-  let current = input;
+  ensureRenderBuffers(network, batchSize);
+  const { layers, activation, _render } = network;
   const numLayers = layers.length;
+  let current = input;
 
   for (let l = 0; l < numLayers; l++) {
     const { weights, biases, fanIn, fanOut } = layers[l];
-    const output = new Float32Array(batchSize * fanOut);
+    const output = _render.buffers[l];
+    const isLast = l === numLayers - 1;
 
     for (let i = 0; i < batchSize; i++) {
       const inOff = i * fanIn;
       const outOff = i * fanOut;
       for (let j = 0; j < fanOut; j++) {
         let sum = biases[j];
+        const wBase = j * fanIn;
         for (let k = 0; k < fanIn; k++) {
-          sum += current[inOff + k] * weights[k * fanOut + j];
+          sum += current[inOff + k] * weights[wBase + k];
         }
         output[outOff + j] = sum;
       }
     }
 
-    // Activation
-    if (l < numLayers - 1) {
-      if (activation === 'relu') {
-        for (let i = 0; i < output.length; i++) {
-          output[i] = output[i] > 0 ? output[i] : 0;
-        }
-      } else {
-        for (let i = 0; i < output.length; i++) {
-          output[i] = Math.tanh(output[i]);
-        }
-      }
+    const n = batchSize * fanOut;
+    if (!isLast && activation === 'relu') {
+      for (let i = 0; i < n; i++) output[i] = output[i] > 0 ? output[i] : 0;
     } else {
-      // Last layer always uses tanh for bounded output
-      for (let i = 0; i < output.length; i++) {
-        output[i] = Math.tanh(output[i]);
-      }
+      for (let i = 0; i < n; i++) output[i] = Math.tanh(output[i]);
     }
     current = output;
   }
@@ -131,163 +204,142 @@ export function forwardRender(network, input, batchSize) {
 }
 
 /**
- * Forward pass with gradient storage for backprop.
- * Returns { output, activations, preActivations }.
+ * Forward + backward + Adam update on a mini-batch. Self-contained: runs its
+ * own forward with gradient caches, all in preallocated buffers.
+ *
+ * @param {object} network
+ * @param {Float32Array} trainInput Row-major [batchSize x fourierDim].
+ * @param {Float32Array} targets Row-major [batchSize x 2], normalised positions.
+ * @param {number} batchSize
+ * @param {number} learningRate
+ * @returns {number} Mean squared error over the batch.
  */
-export function forward(network, input, batchSize) {
-  const { layers, activation } = network;
-  const activations = [input];
-  const preActivations = [];
-  let current = input;
+export function backward(network, trainInput, targets, batchSize, learningRate) {
+  ensureTrainBuffers(network, batchSize);
+  const { layers, activation, _train } = network;
   const numLayers = layers.length;
+  const pre = _train.pre;
+  const act = _train.act;
 
+  // ---- Forward with caches ----
+  let current = trainInput;
   for (let l = 0; l < numLayers; l++) {
     const { weights, biases, fanIn, fanOut } = layers[l];
-    const pre = new Float32Array(batchSize * fanOut);
+    const preL = pre[l];
+    const actL = act[l];
+    const isLast = l === numLayers - 1;
 
     for (let i = 0; i < batchSize; i++) {
       const inOff = i * fanIn;
       const outOff = i * fanOut;
       for (let j = 0; j < fanOut; j++) {
         let sum = biases[j];
+        const wBase = j * fanIn;
         for (let k = 0; k < fanIn; k++) {
-          sum += current[inOff + k] * weights[k * fanOut + j];
+          sum += current[inOff + k] * weights[wBase + k];
         }
-        pre[outOff + j] = sum;
+        preL[outOff + j] = sum;
       }
     }
 
-    preActivations.push(pre);
-
-    const activated = new Float32Array(pre.length);
-    if (l < numLayers - 1) {
-      if (activation === 'relu') {
-        for (let i = 0; i < pre.length; i++) {
-          activated[i] = pre[i] > 0 ? pre[i] : 0;
-        }
-      } else {
-        for (let i = 0; i < pre.length; i++) {
-          activated[i] = Math.tanh(pre[i]);
-        }
-      }
+    const n = batchSize * fanOut;
+    if (!isLast && activation === 'relu') {
+      for (let i = 0; i < n; i++) actL[i] = preL[i] > 0 ? preL[i] : 0;
     } else {
-      for (let i = 0; i < pre.length; i++) {
-        activated[i] = Math.tanh(pre[i]);
-      }
+      for (let i = 0; i < n; i++) actL[i] = Math.tanh(preL[i]);
     }
-
-    activations.push(activated);
-    current = activated;
+    current = actL;
   }
 
-  return { output: current, activations, preActivations };
-}
-
-/**
- * Backward pass + Adam update.
- * trainInput: Float32Array [batchSize × fourierDim] (Fourier-encoded subset)
- * targets: Float32Array [batchSize × 2] (normalised target positions for the subset)
- * Returns mean loss.
- */
-export function backward(network, trainInput, targets, batchSize, learningRate) {
-  const { layers, activation } = network;
-  const numLayers = layers.length;
-
-  // Forward pass on training batch (with gradient storage)
-  const { output, activations, preActivations } = forward(network, trainInput, batchSize);
-
-  // Compute MSE loss gradient
+  // ---- Loss + output-layer gradient ----
+  const output = act[numLayers - 1];
   const outputSize = 2;
   let totalLoss = 0;
-  let dActivated = new Float32Array(batchSize * outputSize);
-
+  let dCur = _train.dA;
   for (let i = 0; i < batchSize * outputSize; i++) {
     const diff = output[i] - targets[i];
     totalLoss += diff * diff;
-    dActivated[i] = (2 * diff) / batchSize;
+    dCur[i] = (2 * diff) / batchSize;
   }
   const meanLoss = totalLoss / (batchSize * outputSize);
 
-  // Increment Adam timestep ONCE per backward call
+  // Adam timestep once per call.
   network.t++;
-  const beta1 = 0.9;
-  const beta2 = 0.999;
-  const eps = 1e-8;
-  const bc1 = 1 - Math.pow(beta1, network.t);
-  const bc2 = 1 - Math.pow(beta2, network.t);
+  const bc1 = 1 - Math.pow(ADAM_BETA1, network.t);
+  const bc2 = 1 - Math.pow(ADAM_BETA2, network.t);
 
-  // Backprop through layers
+  let dNext = _train.dB2;
+
   for (let l = numLayers - 1; l >= 0; l--) {
-    const { weights, biases, fanIn, fanOut } = layers[l];
-    const preAct = preActivations[l];
-    const inputAct = activations[l];
+    const layer = layers[l];
+    const { weights, fanIn, fanOut, dW, dB } = layer;
+    const preL = pre[l];
+    const inputAct = l === 0 ? trainInput : act[l - 1];
+    const isLast = l === numLayers - 1;
 
-    // Gradient through activation
-    const dPre = new Float32Array(batchSize * fanOut);
-    if (l === numLayers - 1) {
+    // Gradient through the activation, written back into dCur in place.
+    if (isLast || activation !== 'relu') {
       for (let i = 0; i < batchSize * fanOut; i++) {
-        const t = Math.tanh(preAct[i]);
-        dPre[i] = dActivated[i] * (1 - t * t);
-      }
-    } else if (activation === 'relu') {
-      for (let i = 0; i < batchSize * fanOut; i++) {
-        dPre[i] = preAct[i] > 0 ? dActivated[i] : 0;
+        const t = Math.tanh(preL[i]);
+        dCur[i] *= 1 - t * t;
       }
     } else {
       for (let i = 0; i < batchSize * fanOut; i++) {
-        const t = Math.tanh(preAct[i]);
-        dPre[i] = dActivated[i] * (1 - t * t);
+        if (preL[i] <= 0) dCur[i] = 0;
       }
     }
 
-    // Weight and bias gradients
-    const dW = new Float32Array(fanIn * fanOut);
-    const dB = new Float32Array(fanOut);
-
+    // Weight and bias gradients (zero the reused buffers first).
+    dW.fill(0);
+    dB.fill(0);
     for (let i = 0; i < batchSize; i++) {
       const inOff = i * fanIn;
       const outOff = i * fanOut;
       for (let j = 0; j < fanOut; j++) {
-        const g = dPre[outOff + j];
+        const g = dCur[outOff + j];
         dB[j] += g;
+        const wBase = j * fanIn;
         for (let k = 0; k < fanIn; k++) {
-          dW[k * fanOut + j] += inputAct[inOff + k] * g;
+          dW[wBase + k] += inputAct[inOff + k] * g;
         }
       }
     }
 
-    // Propagate gradient to previous layer
+    // Propagate gradient to the previous layer's activations.
     if (l > 0) {
-      dActivated = new Float32Array(batchSize * fanIn);
       for (let i = 0; i < batchSize; i++) {
         const inOff = i * fanIn;
         const outOff = i * fanOut;
-        for (let k = 0; k < fanIn; k++) {
-          let sum = 0;
-          for (let j = 0; j < fanOut; j++) {
-            sum += weights[k * fanOut + j] * dPre[outOff + j];
+        for (let k = 0; k < fanIn; k++) dNext[inOff + k] = 0;
+        for (let j = 0; j < fanOut; j++) {
+          const dpj = dCur[outOff + j];
+          const wBase = j * fanIn;
+          for (let k = 0; k < fanIn; k++) {
+            dNext[inOff + k] += weights[wBase + k] * dpj;
           }
-          dActivated[inOff + k] = sum;
         }
       }
+      // Swap ping-pong buffers: dNext becomes the incoming gradient next iter.
+      const tmp = dCur;
+      dCur = dNext;
+      dNext = tmp;
     }
 
-    // Adam update for this layer
-    const layer = layers[l];
+    // Adam update for this layer.
+    const { mW, vW, mB, vB, biases } = layer;
     for (let i = 0; i < dW.length; i++) {
-      layer.mW[i] = beta1 * layer.mW[i] + (1 - beta1) * dW[i];
-      layer.vW[i] = beta2 * layer.vW[i] + (1 - beta2) * dW[i] * dW[i];
-      const mHat = layer.mW[i] / bc1;
-      const vHat = layer.vW[i] / bc2;
-      layer.weights[i] -= learningRate * mHat / (Math.sqrt(vHat) + eps);
+      mW[i] = ADAM_BETA1 * mW[i] + (1 - ADAM_BETA1) * dW[i];
+      vW[i] = ADAM_BETA2 * vW[i] + (1 - ADAM_BETA2) * dW[i] * dW[i];
+      const mHat = mW[i] / bc1;
+      const vHat = vW[i] / bc2;
+      weights[i] -= (learningRate * mHat) / (Math.sqrt(vHat) + ADAM_EPS);
     }
-
     for (let i = 0; i < dB.length; i++) {
-      layer.mB[i] = beta1 * layer.mB[i] + (1 - beta1) * dB[i];
-      layer.vB[i] = beta2 * layer.vB[i] + (1 - beta2) * dB[i] * dB[i];
-      const mHat = layer.mB[i] / bc1;
-      const vHat = layer.vB[i] / bc2;
-      layer.biases[i] -= learningRate * mHat / (Math.sqrt(vHat) + eps);
+      mB[i] = ADAM_BETA1 * mB[i] + (1 - ADAM_BETA1) * dB[i];
+      vB[i] = ADAM_BETA2 * vB[i] + (1 - ADAM_BETA2) * dB[i] * dB[i];
+      const mHat = mB[i] / bc1;
+      const vHat = vB[i] / bc2;
+      biases[i] -= (learningRate * mHat) / (Math.sqrt(vHat) + ADAM_EPS);
     }
   }
 
