@@ -49,6 +49,24 @@ let logoElements: HTMLAnchorElement[] = [];
 let resolvedPositions: Point[] | null = null;
 let resolvedTime = 0;
 
+// ─── FPS tracking ───────────────────────────────────────────────────────────
+
+let fpsFrameCount = 0;
+let fpsLastTime = performance.now();
+const FPS_LOG_INTERVAL = 2000; // log average FPS every 2 seconds
+
+function trackFps(): void {
+  fpsFrameCount++;
+  const now = performance.now();
+  const elapsed = now - fpsLastTime;
+  if (elapsed >= FPS_LOG_INTERVAL) {
+    const avgFps = (fpsFrameCount / elapsed) * 1000;
+    console.log(`FPS: ${avgFps.toFixed(1)}`);
+    fpsFrameCount = 0;
+    fpsLastTime = now;
+  }
+}
+
 // ─── Reference → Screen transform ──────────────────────────────────────────
 
 /** Compute the uniform scale and centering offsets for reference → screen. */
@@ -138,6 +156,7 @@ function startIdleDrift(): void {
     if (state !== 'idle') return;
     updateDrift();
     renderParticles();
+    trackFps();
     animationId = requestAnimationFrame(driftFrame);
   }
   animationId = requestAnimationFrame(driftFrame);
@@ -291,6 +310,7 @@ function homingFrame(): void {
   // Update loss display
   const loss = computeLoss();
   updateLossDisplay(loss);
+  trackFps();
 
   // Check convergence
   if (loss < 0.01) {
@@ -370,6 +390,7 @@ function renderLoop(): void {
   }
 
   renderParticles();
+  trackFps();
   animationId = requestAnimationFrame(renderLoop);
 }
 
