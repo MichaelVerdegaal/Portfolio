@@ -6,10 +6,8 @@
   <title>Michael — Portfolio</title>
   <meta name="description" content="Michael's personal portfolio — data engineering, ML, and more.">
 
-  <!-- Inline favicon (single dot to match the point-cloud theme) -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='white'/></svg>">
 
-  <!-- Google Font -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
@@ -30,7 +28,6 @@
       touch-action: manipulation;
     }
 
-    /* ─── Canvas ─────────────────────────────────────────────────── */
     #point-canvas {
       position: fixed;
       top: 0;
@@ -40,7 +37,6 @@
       z-index: 1;
     }
 
-    /* ─── Centre Button ──────────────────────────────────────────── */
     #reveal-btn {
       position: fixed;
       top: 50%;
@@ -72,7 +68,6 @@
       transform: translate(-50%, -50%) scale(0.97);
     }
 
-    /* ─── Logo Overlay ───────────────────────────────────────────── */
     #logo-overlay {
       position: fixed;
       top: 0;
@@ -95,7 +90,6 @@
       transition: transform 0.2s ease;
     }
 
-    /* ─── Accessibility: visually hidden but available to SR ────── */
     .sr-only {
       position: absolute;
       width: 1px;
@@ -108,7 +102,6 @@
       border: 0;
     }
 
-    /* ─── Static Fallback (reduced motion) ───────────────────────── */
     #static-fallback {
       display: none;
       position: fixed;
@@ -161,16 +154,135 @@
       height: 20px;
       filter: brightness(0) invert(1);
     }
+
+    /* ─── Controls Panel ─────────────────────────────────────────── */
+    #controls {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 50;
+      background: rgba(20, 20, 20, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: #eee;
+      font-size: 12px;
+      font-family: 'Inter', monospace;
+      min-width: 220px;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+
+    #controls summary {
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 0.03em;
+      user-select: none;
+      list-style: none;
+    }
+
+    #controls summary::-webkit-details-marker { display: none; }
+    #controls summary::before {
+      content: '▸ ';
+    }
+    #controls[open] summary::before {
+      content: '▾ ';
+    }
+
+    #controls label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 8px;
+      gap: 8px;
+    }
+
+    #controls select,
+    #controls input[type="number"] {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      color: #fff;
+      padding: 3px 6px;
+      font-size: 12px;
+      font-family: monospace;
+      width: 90px;
+    }
+
+    #controls select {
+      width: 100px;
+    }
+
+    #controls select option {
+      background: #1a1a1a;
+      color: #eee;
+    }
+
+    #controls button {
+      margin-top: 12px;
+      width: 100%;
+      padding: 6px 0;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 4px;
+      color: #fff;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    #controls button:hover {
+      background: rgba(255, 255, 255, 0.22);
+    }
+
+    #param-fields {
+      margin-top: 6px;
+    }
+
+    /* ─── Loss Counter ───────────────────────────────────────────── */
+    #loss-counter {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      z-index: 50;
+      color: rgba(255, 255, 255, 0.6);
+      font-family: 'Inter', monospace;
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.02em;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
   </style>
 </head>
 <body>
-  <!-- Main canvas for particle rendering -->
   <canvas id="point-canvas" aria-hidden="true"></canvas>
 
-  <!-- Reveal button -->
+  <!-- Loss counter -->
+  <div id="loss-counter" aria-hidden="true"></div>
+
+  <!-- Controls panel -->
+  <details id="controls" open>
+    <summary>Controls</summary>
+    <label>
+      Optimizer
+      <select id="ctrl-optimizer">
+        <option value="pso">PSO</option>
+        <option value="adam">Adam</option>
+        <option value="sgd">SGD</option>
+        <option value="rmsprop">RMSProp</option>
+        <option value="muon">Muon</option>
+      </select>
+    </label>
+    <div id="param-fields"></div>
+    <button id="ctrl-reset" type="button">Reset</button>
+  </details>
+
   <button id="reveal-btn" aria-label="Reveal name">Discover</button>
 
-  <!-- Logo overlay container -->
   <div id="logo-overlay" aria-hidden="true"></div>
 
   <!-- Accessible content for screen readers and SEO -->
@@ -189,22 +301,21 @@
   <div id="static-fallback" aria-label="Portfolio">
     <h1>Michael</h1>
     <div class="static-links">
-      <a href="https://github.com/michael" target="_blank" rel="noopener noreferrer">
+      <a href="https://github.com/MichaelVerdegaal" target="_blank" rel="noopener noreferrer">
         <img src="assets/logos/github.svg" alt="">
         GitHub
       </a>
-      <a href="https://linkedin.com/in/michael" target="_blank" rel="noopener noreferrer">
+      <a href="https://www.linkedin.com/in/michael-verdegaal-2b8353164/" target="_blank" rel="noopener noreferrer">
         <img src="assets/logos/linkedin.svg" alt="">
         LinkedIn
       </a>
-      <a href="mailto:michael@example.com">
+      <a href="mailto:mverdegaal@protonmail.com">
         <img src="assets/logos/email.svg" alt="">
         Email
       </a>
     </div>
   </div>
 
-  <!-- Application entry point -->
   <script type="module" src="main.js"></script>
 </body>
 </html>
