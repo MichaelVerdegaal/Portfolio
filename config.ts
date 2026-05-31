@@ -1,19 +1,47 @@
-/**
- * Configuration for the particle-swarm portfolio landing page.
- * Edit this file to change all content, styling, and behaviour.
- */
-export default {
-  // The name to render as the point cloud target
+export type OptimizerType = 'pso' | 'adam' | 'sgd' | 'rmsprop' | 'muon';
+
+export interface Config {
+  name: string;
+  font: { family: string; weight: string; url: string };
+  palette: {
+    background: string;
+    points: string;
+    pointsAlpha: number;
+    button: string;
+    buttonText: string;
+    buttonHover: string;
+    logoAccent: string;
+  };
+  particles: { count: number; radius: number; driftSpeed: number };
+  optimizer: {
+    type: OptimizerType;
+    muon: { learningRate: number; momentum: number; nsSteps: number };
+    sgd: { learningRate: number; momentum: number };
+    adam: { learningRate: number; beta1: number; beta2: number; epsilon: number };
+    pso: { inertiaStart: number; inertiaEnd: number; cognitive: number; social: number; maxSpeed: number };
+    rmsprop: { learningRate: number; alpha: number; epsilon: number; momentum: number };
+  };
+  reveal: { durationSeconds: number; stepsPerFrame: number };
+  logos: Array<{ label: string; svg: string; href: string }>;
+  layout: {
+    nameScale: number;
+    logoGap: number;
+    logoHeight: number;
+    logoWidth: number;
+    logoPadding: number;
+  };
+  canvas: { referenceWidth: number; referenceHeight: number };
+}
+
+const config: Config = {
   name: 'Michael Verdegaal',
 
-  // Font for rendering the name to sample target points
   font: {
     family: 'Manrope',
     weight: '700',
     url: 'https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap',
   },
 
-  // Colour palette
   palette: {
     background: '#191A1C',
     points: '#ffffff',
@@ -24,16 +52,14 @@ export default {
     logoAccent: '#ffffff',
   },
 
-  // Particle system
   particles: {
     count: 50000,
     radius: 0.8,
     driftSpeed: 0.3,
   },
 
-  // Optimiser selection and parameters
   optimizer: {
-    type: 'muon', // 'pso' | 'adam' | 'sgd' | 'rmsprop' | 'muon'
+    type: 'muon',
 
     muon: {
       learningRate: 30,
@@ -67,17 +93,13 @@ export default {
       epsilon: 1e-8,
       momentum: 0,
     },
-
-
   },
 
-  // Reveal timing
   reveal: {
     durationSeconds: 30,
     stepsPerFrame: 10,
   },
 
-  // Logos and links displayed beneath the name
   logos: [
     {
       label: 'GitHub',
@@ -96,7 +118,6 @@ export default {
     },
   ],
 
-  // Layout proportions (fraction of canvas)
   layout: {
     nameScale: 0.35,
     logoGap: 0.08,
@@ -104,4 +125,13 @@ export default {
     logoWidth: 0.06,
     logoPadding: 0.04,
   },
+
+  // Reference resolution: all particle positions and targets are generated
+  // in this coordinate space, then uniformly scaled to the actual canvas.
+  canvas: {
+    referenceWidth: 1920,
+    referenceHeight: 1080,
+  },
 };
+
+export default config;

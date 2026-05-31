@@ -1,38 +1,109 @@
 /**
  * Main application: orchestrates idle drift, optimiser-driven homing, rendering,
- * and logo transitions. No neural network — particles move directly toward their
- * targets under a selectable optimiser (SGD, Adam, or PSO).
+ * and logo transitions. All particle positions live in a fixed reference
+ * coordinate system (config.canvas.referenceWidth × referenceHeight) and are
+ * uniformly scaled to the actual canvas at render time, so the layout looks
+ * identical on every screen size.
  */
-import config from './config.js';
-import { generateTargets } from './targets.js';
-import { createOptimizer, setTotalSteps, optimizerStep, readPositions } from './optimizers.js';
+import config from './config';
+import type { OptimizerType } from './config';
+import { generateTargets } from './targets';
+import type { Point, LogoPosition } from './targets';
+import { createOptimizer, setTotalSteps, optimizerStep, readPositions } from './optimizers';
+import type { OptimizerState } from './optimizers';
+import { createRenderer } from './renderer';
+import type { Renderer } from './renderer';
+
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+}
+
+type AppState = 'idle' | 'homing' | 'resolved';
 
 // ─── State ──────────────────────────────────────────────────────────────────
-let canvas, ctx;
-let particles = [];
-let state = 'idle'; // 'idle' | 'homing' | 'resolved'
-let animationId = null;
+
+let canvas: HTMLCanvasElement;
+let renderer: Renderer;
+let particles: Particle[] = [];
+let state: AppState = 'idle';
+let animationId: number | null = null;
+
+// Reference dimensions (from config)
+const REF_W = config.canvas.referenceWidth;
+const REF_H = config.canvas.referenceHeight;
 
 // Homing state
-let optimizer = null;
-let targetPositions = null;
-let logoPositions = null;
+let optimizer: OptimizerState | null = null;
+let targetPositions: Point[] | null = null;
+let logoPositions: LogoPosition[] | null = null;
 let homingStep = 0;
 let totalHomingSteps = 0;
 
 // Logo fade state
-let logoElements = [];
+let logoElements: HTMLAnchorElement[] = [];
 
 // Post-convergence micro-drift
-let resolvedPositions = null;
+let resolvedPositions: Point[] | null = null;
 let resolvedTime = 0;
+
+// ─── FPS tracking ───────────────────────────────────────────────────────────
+
+let fpsFrameCount = 0;
+let fpsLastTime = performance.now();
+const FPS_LOG_INTERVAL = 2000; // log average FPS every 2 seconds
+
+function trackFps(): void {
+  fpsFrameCount++;
+  const now = performance.now();
+  const elapsed = now - fpsLastTime;
+  if (elapsed >= FPS_LOG_INTERVAL) {
+    const avgFps = (fpsFrameCount / elapsed) * 1000;
+    console.log(`FPS: ${avgFps.toFixed(1)}`);
+    fpsFrameCount = 0;
+    fpsLastTime = now;
+  }
+}
+
+// ─── Reference → Screen transform ──────────────────────────────────────────
+
+/** Cached transform — recomputed only on resize. */
+let cachedScale = 1;
+let cachedOffsetX = 0;
+let cachedOffsetY = 0;
+
+function updateCachedTransform(): void {
+  const scaleX = canvas.width / REF_W;
+  const scaleY = canvas.height / REF_H;
+  cachedScale = Math.min(scaleX, scaleY);
+  cachedOffsetX = (canvas.width - REF_W * cachedScale) / 2;
+  cachedOffsetY = (canvas.height - REF_H * cachedScale) / 2;
+}
+
+/** Map a reference-space point to screen pixels. */
+function refToScreen(rx: number, ry: number): { x: number; y: number } {
+  return { x: rx * cachedScale + cachedOffsetX, y: ry * cachedScale + cachedOffsetY };
+}
 
 // ─── Initialisation ─────────────────────────────────────────────────────────
 
-export function init() {
-  canvas = document.getElementById('point-canvas');
-  ctx = canvas.getContext('2d');
-  resizeCanvas();
+export function init(): void {
+  canvas = document.getElementById('point-canvas') as HTMLCanvasElement;
+
+  renderer = createRenderer({
+    canvas,
+    maxParticles: config.particles.count + 1000, // headroom for target mismatch
+    background: config.palette.background,
+    pointColor: config.palette.points,
+    pointAlpha: config.palette.pointsAlpha,
+    pointRadius: config.particles.radius,
+    refWidth: REF_W,
+    refHeight: REF_H,
+  });
 
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     showStaticFallback();
@@ -42,7 +113,7 @@ export function init() {
   initParticles();
   startIdleDrift();
 
-  const btn = document.getElementById('reveal-btn');
+  const btn = document.getElementById('reveal-btn')!;
   btn.addEventListener('click', startReveal);
   btn.addEventListener('touchend', (e) => {
     e.preventDefault();
@@ -52,32 +123,15 @@ export function init() {
   window.addEventListener('resize', handleResize);
 }
 
-function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+function resizeCanvas(): void {
+  renderer.resize();
+  updateCachedTransform();
 }
 
-function handleResize() {
-  const oldWidth = canvas.width;
-  const oldHeight = canvas.height;
+function handleResize(): void {
   resizeCanvas();
-
-  if (oldWidth === 0 || oldHeight === 0) return;
-
-  const scaleX = canvas.width / oldWidth;
-  const scaleY = canvas.height / oldHeight;
-  for (const p of particles) {
-    p.x *= scaleX;
-    p.y *= scaleY;
-  }
-
-  if (resolvedPositions) {
-    for (const p of resolvedPositions) {
-      p.x *= scaleX;
-      p.y *= scaleY;
-    }
-  }
-
+  // Particles live in reference space — no position rescaling needed.
+  // Just reposition DOM overlays if resolved.
   if (state === 'resolved') {
     positionLogoOverlays();
   }
@@ -85,20 +139,20 @@ function handleResize() {
 
 // ─── Particles ──────────────────────────────────────────────────────────────
 
-function initParticles() {
+function initParticles(): void {
   const count = getParticleCount();
   particles = [];
   for (let i = 0; i < count; i++) {
     particles.push({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
+      x: Math.random() * REF_W,
+      y: Math.random() * REF_H,
       vx: (Math.random() - 0.5) * config.particles.driftSpeed,
       vy: (Math.random() - 0.5) * config.particles.driftSpeed,
     });
   }
 }
 
-function getParticleCount() {
+function getParticleCount(): number {
   const area = window.innerWidth * window.innerHeight;
   const refArea = 1920 * 1080;
   const scale = Math.min(1, Math.sqrt(area / refArea));
@@ -107,34 +161,48 @@ function getParticleCount() {
 
 // ─── Idle Drift ─────────────────────────────────────────────────────────────
 
-function startIdleDrift() {
+function startIdleDrift(): void {
   state = 'idle';
-  function driftFrame() {
+  function driftFrame(): void {
     if (state !== 'idle') return;
     updateDrift();
     renderParticles();
+    trackFps();
     animationId = requestAnimationFrame(driftFrame);
   }
   animationId = requestAnimationFrame(driftFrame);
 }
 
-function updateDrift() {
-  const w = canvas.width;
-  const h = canvas.height;
+// Fast xorshift128 PRNG — avoids overhead of Math.random() in hot loops
+let _s0 = 123456789 | 0;
+let _s1 = 362436069 | 0;
+let _s2 = 521288629 | 0;
+let _s3 = 88675123 | 0;
+function fastRandom(): number {
+  const t = _s3 ^ (_s3 << 11);
+  _s3 = _s2; _s2 = _s1; _s1 = _s0;
+  _s0 = (_s0 ^ (_s0 >>> 19)) ^ (t ^ (t >>> 8));
+  // Map to [0, 1) — use unsigned shift to get positive value
+  return (_s0 >>> 0) / 4294967296;
+}
+
+function updateDrift(): void {
   const speed = config.particles.driftSpeed;
+  const margin = 50;
+  const jitter = 0.02 * speed;
 
   for (const p of particles) {
     p.x += p.vx;
     p.y += p.vy;
 
-    const margin = 50;
-    if (p.x < -margin) p.x = w + margin;
-    if (p.x > w + margin) p.x = -margin;
-    if (p.y < -margin) p.y = h + margin;
-    if (p.y > h + margin) p.y = -margin;
+    // Wrap in reference space
+    if (p.x < -margin) p.x = REF_W + margin;
+    if (p.x > REF_W + margin) p.x = -margin;
+    if (p.y < -margin) p.y = REF_H + margin;
+    if (p.y > REF_H + margin) p.y = -margin;
 
-    p.vx += (Math.random() - 0.5) * 0.02 * speed;
-    p.vy += (Math.random() - 0.5) * 0.02 * speed;
+    p.vx += (fastRandom() - 0.5) * jitter;
+    p.vy += (fastRandom() - 0.5) * jitter;
     p.vx *= 0.99;
     p.vy *= 0.99;
   }
@@ -142,45 +210,39 @@ function updateDrift() {
 
 // ─── Rendering ──────────────────────────────────────────────────────────────
 
-function renderParticles() {
-  ctx.fillStyle = config.palette.background;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+function renderParticles(): void {
+  renderer.drawParticles(particles, particles.length);
+}
 
-  const radius = config.particles.radius;
-  ctx.fillStyle = config.palette.points;
-  ctx.globalAlpha = config.palette.pointsAlpha;
-
-  ctx.beginPath();
-  for (const p of particles) {
-    ctx.moveTo(p.x + radius, p.y);
-    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-  }
-  ctx.fill();
-  ctx.globalAlpha = 1;
+/** Render directly from optimizer typed arrays — avoids the readPositions copy. */
+function renderFromArrays(px: Float64Array, py: Float64Array, n: number): void {
+  renderer.drawFromArrays(px, py, n);
 }
 
 // ─── Loss Display ───────────────────────────────────────────────────────────
 
-function computeLoss() {
-  if (!targetPositions) return 0;
+let lossFrameCounter = 0;
+let lastLoss = 0;
+
+/** Compute loss directly from optimizer typed arrays — avoids particle object access. */
+function computeLossFromArrays(px: Float64Array, py: Float64Array, tx: Float64Array, ty: Float64Array, n: number): number {
   let total = 0;
-  const n = particles.length;
   for (let i = 0; i < n; i++) {
-    const dx = particles[i].x - targetPositions[i].x;
-    const dy = particles[i].y - targetPositions[i].y;
+    const dx = px[i] - tx[i];
+    const dy = py[i] - ty[i];
     total += dx * dx + dy * dy;
   }
   return total / n;
 }
 
-function formatLoss(v) {
+function formatLoss(v: number): string {
   if (v >= 10000) return v.toExponential(2);
   if (v >= 100) return v.toFixed(1);
   if (v >= 1) return v.toFixed(3);
   return v.toFixed(5);
 }
 
-function updateLossDisplay(loss) {
+function updateLossDisplay(loss: number): void {
   const el = document.getElementById('loss-counter');
   if (!el) return;
   const name = config.optimizer.type.toUpperCase();
@@ -188,7 +250,7 @@ function updateLossDisplay(loss) {
   el.style.opacity = '1';
 }
 
-function hideLossDisplay() {
+function hideLossDisplay(): void {
   const el = document.getElementById('loss-counter');
   if (el) {
     el.textContent = '';
@@ -198,27 +260,27 @@ function hideLossDisplay() {
 
 // ─── Homing / Reveal ────────────────────────────────────────────────────────
 
-async function startReveal() {
+async function startReveal(): Promise<void> {
   if (state !== 'idle') return;
   state = 'homing';
 
   // Hide button
-  const btn = document.getElementById('reveal-btn');
+  const btn = document.getElementById('reveal-btn')!;
   btn.style.opacity = '0';
   btn.style.pointerEvents = 'none';
 
   if (animationId) cancelAnimationFrame(animationId);
 
-  // Generate targets
-  const result = await generateTargets(config, canvas.width, canvas.height, particles.length);
+  // Generate targets in reference space
+  const result = await generateTargets(config, particles.length);
   targetPositions = result.targets;
   logoPositions = result.logoPositions;
 
   // Match particle count to target count
   while (particles.length < targetPositions.length) {
     particles.push({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
+      x: Math.random() * REF_W,
+      y: Math.random() * REF_H,
       vx: 0,
       vy: 0,
     });
@@ -241,32 +303,39 @@ async function startReveal() {
   homingFrame();
 }
 
-function homingFrame() {
+function homingFrame(): void {
   if (state !== 'homing') return;
 
   const stepsPerFrame = config.reveal.stepsPerFrame;
 
   for (let s = 0; s < stepsPerFrame; s++) {
-    optimizerStep(optimizer);
+    optimizerStep(optimizer!);
     homingStep++;
   }
 
-  // Copy positions from optimiser into particles for rendering
-  readPositions(optimizer, particles);
-  renderParticles();
+  // Render directly from optimizer arrays — skip readPositions copy
+  renderFromArrays(optimizer!.px, optimizer!.py, optimizer!.n);
 
-  // Update loss display
-  const loss = computeLoss();
-  updateLossDisplay(loss);
+  // Throttle loss computation to every 10th frame
+  lossFrameCounter++;
+  if (lossFrameCounter >= 10) {
+    lossFrameCounter = 0;
+    lastLoss = computeLossFromArrays(optimizer!.px, optimizer!.py, optimizer!.tx, optimizer!.ty, optimizer!.n);
+    updateLossDisplay(lastLoss);
+  }
+  trackFps();
 
-  // Check convergence
-  if (loss < 0.01) {
+  // Check convergence (using last computed loss)
+  if (lastLoss < 0.01 && lossFrameCounter === 0) {
+    // Copy final positions to particles for resolved state
+    readPositions(optimizer!, particles);
     resolveHoming();
     return;
   }
 
   // Safety: resolve after exceeding step budget
   if (homingStep > totalHomingSteps * 2) {
+    readPositions(optimizer!, particles);
     resolveHoming();
     return;
   }
@@ -274,12 +343,12 @@ function homingFrame() {
   animationId = requestAnimationFrame(homingFrame);
 }
 
-function resolveHoming() {
+function resolveHoming(): void {
   state = 'resolved';
   // Snap to targets for crispness
   for (let i = 0; i < particles.length; i++) {
-    particles[i].x = targetPositions[i].x;
-    particles[i].y = targetPositions[i].y;
+    particles[i].x = targetPositions![i].x;
+    particles[i].y = targetPositions![i].y;
   }
   resolvedPositions = particles.map(p => ({ x: p.x, y: p.y }));
   fadeInLogos();
@@ -287,17 +356,18 @@ function resolveHoming() {
 
 // ─── Logo Fade-In ───────────────────────────────────────────────────────────
 
-function fadeInLogos() {
-  const container = document.getElementById('logo-overlay');
+function fadeInLogos(): void {
+  const container = document.getElementById('logo-overlay')!;
   container.innerHTML = '';
   logoElements = [];
 
-  // The point cluster is the visible logo now. Each anchor is an invisible
-  // clickable box laid over its cluster, so the hit target sits on the points
-  // and there is nothing to size-match.
   config.logos.forEach((logo, i) => {
-    if (!logoPositions[i]) return;
-    const pos = logoPositions[i];
+    if (!logoPositions![i]) return;
+    const pos = logoPositions![i];
+
+    // Convert reference-space logo rect to screen pixels
+    const screenTopLeft = refToScreen(pos.x, pos.y);
+    const scale = cachedScale;
 
     const a = document.createElement('a');
     a.href = logo.href;
@@ -308,10 +378,10 @@ function fadeInLogos() {
     a.className = 'logo-link';
     a.setAttribute('aria-label', logo.label);
     a.style.position = 'absolute';
-    a.style.left = `${pos.x}px`;
-    a.style.top = `${pos.y}px`;
-    a.style.width = `${pos.width}px`;
-    a.style.height = `${pos.height}px`;
+    a.style.left = `${screenTopLeft.x}px`;
+    a.style.top = `${screenTopLeft.y}px`;
+    a.style.width = `${pos.width * scale}px`;
+    a.style.height = `${pos.height * scale}px`;
 
     container.appendChild(a);
     logoElements.push(a);
@@ -321,65 +391,66 @@ function fadeInLogos() {
   renderLoop();
 }
 
-function renderLoop() {
+function renderLoop(): void {
   if (state !== 'resolved') return;
 
   // Subtle micro-drift around settled positions
   resolvedTime += 0.01;
   if (resolvedPositions) {
     const amp = 0.3;
-    for (let i = 0; i < particles.length; i++) {
-      const phase = i * 0.01 + resolvedTime;
-      particles[i].x = resolvedPositions[i].x + Math.sin(phase) * amp;
-      particles[i].y = resolvedPositions[i].y + Math.cos(phase * 0.7) * amp;
+    const t = resolvedTime;
+    // Use a cheap triangle-wave approximation instead of sin/cos per particle
+    // sin(x) ≈ triangle wave with same period, indistinguishable at 0.3px amplitude
+    const n = particles.length;
+    for (let i = 0; i < n; i++) {
+      const phase = i * 0.01 + t;
+      // Wrap to [0, 2π], then cheap triangle wave in [-1, 1]
+      const px = ((phase % 6.2832) / 3.1416) - 1; // [-1, 1]
+      const py = (((phase * 0.7) % 6.2832) / 3.1416) - 1;
+      particles[i].x = resolvedPositions[i].x + px * amp;
+      particles[i].y = resolvedPositions[i].y + py * amp;
     }
   }
 
   renderParticles();
+  trackFps();
   animationId = requestAnimationFrame(renderLoop);
 }
 
-function positionLogoOverlays() {
+function positionLogoOverlays(): void {
   if (!logoPositions || logoElements.length === 0) return;
 
-  const isMobile = canvas.width < 768;
-  const logoScale = isMobile ? 1.8 : 1;
-  const logoHeight = canvas.height * config.layout.logoHeight * logoScale;
-  const logoWidth = canvas.width * config.layout.logoWidth * logoScale;
-  const logoPadding = canvas.width * config.layout.logoPadding * (isMobile ? 1.5 : 1);
-  const totalLogosWidth = config.logos.length * logoWidth + (config.logos.length - 1) * logoPadding;
-  const logoStartX = (canvas.width - totalLogosWidth) / 2;
-  const logoY = canvas.height * (0.42 + config.layout.nameScale / 2 + config.layout.logoGap);
+  const scale = cachedScale;
 
   logoElements.forEach((el, i) => {
-    const lx = logoStartX + i * (logoWidth + logoPadding);
-    el.style.left = `${lx}px`;
-    el.style.top = `${logoY}px`;
-    el.style.width = `${logoWidth}px`;
-    el.style.height = `${logoHeight}px`;
+    const pos = logoPositions![i];
+    if (!pos) return;
+    const screenTopLeft = refToScreen(pos.x, pos.y);
+    el.style.left = `${screenTopLeft.x}px`;
+    el.style.top = `${screenTopLeft.y}px`;
+    el.style.width = `${pos.width * scale}px`;
+    el.style.height = `${pos.height * scale}px`;
   });
 }
 
 // ─── Reduced Motion Fallback ────────────────────────────────────────────────
 
-function showStaticFallback() {
+function showStaticFallback(): void {
   canvas.style.display = 'none';
-  document.getElementById('reveal-btn').style.display = 'none';
-  document.getElementById('sr-content').style.display = 'none';
-  document.getElementById('controls').style.display = 'none';
-  const fallback = document.getElementById('static-fallback');
+  document.getElementById('reveal-btn')!.style.display = 'none';
+  document.getElementById('sr-content')!.style.display = 'none';
+  document.getElementById('controls')!.style.display = 'none';
+  const fallback = document.getElementById('static-fallback')!;
   fallback.setAttribute('role', 'main');
   fallback.style.display = 'flex';
 }
 
 // ─── Reset ──────────────────────────────────────────────────────────────────
 
-function resetSimulation() {
-  // Cancel any running animation
+function resetSimulation(): void {
   if (animationId) cancelAnimationFrame(animationId);
   animationId = null;
 
-  // Reset state
   state = 'idle';
   optimizer = null;
   targetPositions = null;
@@ -389,24 +460,27 @@ function resetSimulation() {
   resolvedTime = 0;
   hideLossDisplay();
 
-  // Clear logo overlay
-  const container = document.getElementById('logo-overlay');
+  const container = document.getElementById('logo-overlay')!;
   container.innerHTML = '';
   logoElements = [];
 
-  // Restore button
-  const btn = document.getElementById('reveal-btn');
+  const btn = document.getElementById('reveal-btn')!;
   btn.style.opacity = '1';
   btn.style.pointerEvents = 'auto';
 
-  // Re-init particles and restart drift
   initParticles();
   startIdleDrift();
 }
 
 // ─── Controls Panel ─────────────────────────────────────────────────────────
 
-const PARAM_DEFS = {
+interface ParamDef {
+  key: string;
+  label: string;
+  step: number;
+}
+
+const PARAM_DEFS: Record<OptimizerType, ParamDef[]> = {
   sgd: [
     { key: 'learningRate', label: 'Learning Rate', step: 0.01 },
     { key: 'momentum', label: 'Momentum', step: 0.01 },
@@ -437,26 +511,27 @@ const PARAM_DEFS = {
   ],
 };
 
-function initControls() {
-  const select = document.getElementById('ctrl-optimizer');
-  const paramsDiv = document.getElementById('param-fields');
-  const resetBtn = document.getElementById('ctrl-reset');
+function initControls(): void {
+  const select = document.getElementById('ctrl-optimizer') as HTMLSelectElement;
+  const paramsDiv = document.getElementById('param-fields')!;
+  const resetBtn = document.getElementById('ctrl-reset')!;
 
-  // Set initial selection from config
   select.value = config.optimizer.type;
   renderParams(config.optimizer.type);
 
   select.addEventListener('change', () => {
-    config.optimizer.type = select.value;
-    renderParams(select.value);
+    config.optimizer.type = select.value as OptimizerType;
+    renderParams(select.value as OptimizerType);
   });
 
   resetBtn.addEventListener('click', resetSimulation);
 
-  function renderParams(type) {
+  function renderParams(type: OptimizerType): void {
     paramsDiv.innerHTML = '';
     const defs = PARAM_DEFS[type];
     if (!defs) return;
+
+    const params = config.optimizer[type] as Record<string, number>;
 
     for (const def of defs) {
       const label = document.createElement('label');
@@ -464,12 +539,12 @@ function initControls() {
       span.textContent = def.label;
       const input = document.createElement('input');
       input.type = 'number';
-      input.step = def.step;
-      input.value = config.optimizer[type][def.key];
+      input.step = String(def.step);
+      input.value = String(params[def.key]);
       input.addEventListener('input', () => {
         const val = parseFloat(input.value);
         if (!isNaN(val)) {
-          config.optimizer[type][def.key] = val;
+          params[def.key] = val;
         }
       });
       label.appendChild(span);
