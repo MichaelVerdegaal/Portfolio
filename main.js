@@ -260,7 +260,7 @@ function homingFrame() {
   updateLossDisplay(loss);
 
   // Check convergence
-  if (loss < 1.0) {
+  if (loss < 0.01) {
     resolveHoming();
     return;
   }
@@ -276,7 +276,6 @@ function homingFrame() {
 
 function resolveHoming() {
   state = 'resolved';
-  hideLossDisplay();
   // Snap to targets for crispness
   for (let i = 0; i < particles.length; i++) {
     particles[i].x = targetPositions[i].x;

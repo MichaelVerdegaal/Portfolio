@@ -26,7 +26,7 @@ export default {
 
   // Particle system
   particles: {
-    count: 20000,
+    count: 50000,
     radius: 0.8,
     driftSpeed: 0.3,
   },
@@ -36,7 +36,7 @@ export default {
     type: 'pso', // 'pso' | 'adam' | 'sgd' | 'rmsprop' | 'muon'
 
     sgd: {
-      learningRate: 0.0001,
+      learningRate: 0.0005,
       momentum: 0.5,
     },
 
@@ -52,7 +52,7 @@ export default {
       inertiaEnd: 0.2,
       cognitive: 0.5,
       social: 0.5,
-      maxSpeed: 0.05,
+      maxSpeed: 0.1,
     },
 
     rmsprop: {
