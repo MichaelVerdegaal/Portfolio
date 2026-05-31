@@ -14,7 +14,7 @@
  */
 
 // Fraction of the reveal spent at full step size before the taper to a stop begins.
-const SETTLE_START = 0.98;
+const SETTLE_START = 0.95;
 
 /**
  * Global settle gain over the reveal: 1.0 until SETTLE_START, then a cosine

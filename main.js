@@ -268,6 +268,9 @@ function fadeInLogos() {
   container.innerHTML = '';
   logoElements = [];
 
+  // The point cluster is the visible logo now. Each anchor is an invisible
+  // clickable box laid over its cluster, so the hit target sits on the points
+  // and there is nothing to size-match.
   config.logos.forEach((logo, i) => {
     if (!logoPositions[i]) return;
     const pos = logoPositions[i];
@@ -285,25 +288,9 @@ function fadeInLogos() {
     a.style.top = `${pos.y}px`;
     a.style.width = `${pos.width}px`;
     a.style.height = `${pos.height}px`;
-    a.style.opacity = '0';
-    a.style.transition = 'opacity 1.2s ease-in';
 
-    const img = document.createElement('img');
-    img.src = logo.svg;
-    img.alt = logo.label;
-    img.style.width = '100%';
-    img.style.height = '100%';
-    img.style.filter = 'brightness(0) invert(1)';
-
-    a.appendChild(img);
     container.appendChild(a);
     logoElements.push(a);
-  });
-
-  requestAnimationFrame(() => {
-    for (const el of logoElements) {
-      el.style.opacity = '1';
-    }
   });
 
   resolvedTime = 0;
