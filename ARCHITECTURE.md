@@ -5,18 +5,16 @@
 The site is a state machine with three phases:
 
 1. **Idle** — particles drift randomly across the full viewport.
-2. **Homing** — each particle homes toward an assigned target under the selected
-   optimizer. Runs on GPU via Transform Feedback (SGD/Adam/PSO/RMSProp) or falls
-   back to CPU (Muon).
-3. **Resolved** — particles sit on their targets with subtle micro-drift; logo
-   SVGs fade in as clickable overlays.
+2. **Homing** — each particle homes toward an assigned target under the selected optimizer. Runs on
+   GPU via Transform Feedback (SGD/Adam/PSO/RMSProp) or falls back to CPU (Muon).
+3. **Resolved** — particles sit on their targets with subtle micro-drift; logo SVGs fade in as
+   clickable overlays.
 
 All particle positions are generated in a fixed *reference coordinate system*
-(`config.canvas.referenceWidth × referenceHeight`, default 1920×1080). The
-renderer uniformly scales this to the actual canvas at draw time, so the layout
-looks identical on every display. For idle drift, the visible reference-space
-bounds are extended to cover the full viewport — on an ultrawide the horizontal
-range stretches beyond `[0, 1920]`, so particles fill edge to edge.
+(`config.canvas.referenceWidth × referenceHeight`, default 1920×1080). The renderer uniformly scales
+this to the actual canvas at draw time, so the layout looks identical on every display. For idle
+drift, the visible reference-space bounds are extended to cover the full viewport — on an ultrawide
+the horizontal range stretches beyond `[0, 1920]`, so particles fill edge to edge.
 
 ## Rendering pipeline — `renderer.ts`
 
@@ -29,9 +27,9 @@ range stretches beyond `[0, 1920]`, so particles fill edge to edge.
 
 #### Simple path
 
-Two split `Float32Array` buffers (X and Y) are uploaded per frame via
-`bufferSubData`. A vertex shader reads `a_x` and `a_y`, applies the
-reference→screen transform, and emits `gl_PointSize`-scaled points.
+Two split `Float32Array` buffers (X and Y) are uploaded per frame via `bufferSubData`. A vertex
+shader reads `a_x` and `a_y`, applies the reference→screen transform, and emits
+`gl_PointSize`-scaled points.
 
 #### GPU Transform Feedback path
 
@@ -47,18 +45,17 @@ Two such buffers form a **ping-pong pair**. Each optimizer step:
 1. Bind buffer A as vertex input via a VAO (4 × vec2 attributes).
 2. Bind buffer B as the Transform Feedback output.
 3. Enable `RASTERIZER_DISCARD` (no fragments needed for the update pass).
-4. Run the optimizer's vertex shader — it reads position, velocity, moments,
-   and the target (from a texture), computes the update rule, and writes the new
-   state to the TF varyings.
+4. Run the optimizer's vertex shader — it reads position, velocity, moments, and the target (from a
+   texture), computes the update rule, and writes the new state to the TF varyings.
 5. Swap A ↔ B.
 
-After all steps for the frame, disable `RASTERIZER_DISCARD`, bind the latest
-buffer's render VAO (reads only `a_pos`), and draw as `gl_POINTS`.
+After all steps for the frame, disable `RASTERIZER_DISCARD`, bind the latest buffer's render VAO
+(reads only `a_pos`), and draw as `gl_POINTS`.
 
 ### Target texture
 
-Target positions are stored in an `RG32F` texture (width 1024, height =
-⌈count/1024⌉). The update shader samples each particle's target via:
+Target positions are stored in an `RG32F` texture (width 1024, height = ⌈count/1024⌉). The update
+shader samples each particle's target via:
 
 ```glsl
 texelFetch(u_targets, ivec2(gl_VertexID % u_texWidth, gl_VertexID / u_texWidth), 0).xy
@@ -68,17 +65,16 @@ This avoids needing a second set of interleaved buffer attributes for targets.
 
 ### Settle gain taper
 
-All optimizers have a `u_gain` uniform that multiplies into learning rates and
-inertia. At constant step sizes, none of the optimizers land cleanly: Adam keeps
-stepping at roughly its learning rate even as the gradient vanishes, and PSO's
-random forcing never dies. Tapering gain to zero via a cosine schedule over the
-final 5% of the reveal collapses oscillation amplitude so particles settle
+All optimizers have a `u_gain` uniform that multiplies into learning rates and inertia. At constant
+step sizes, none of the optimizers land cleanly: Adam keeps stepping at roughly its learning rate
+even as the gradient vanishes, and PSO's random forcing never dies. Tapering gain to zero via a
+cosine schedule over the final 5% of the reveal collapses oscillation amplitude so particles settle
 exactly on their targets.
 
 ## Optimizers — `optimizers.ts` / GPU shaders
 
-Each optimizer minimises `0.5 * |p - t|²` per particle (gradient = `p - t`).
-They differ only in how that gradient becomes a position update:
+Each optimizer minimises `0.5 * |p - t|²` per particle (gradient = `p - t`). They differ only in how
+that gradient becomes a position update:
 
 | Optimizer  | State per particle                    | Key dynamics                     |
 | ---------- | ------------------------------------- | -------------------------------- |
@@ -90,69 +86,65 @@ They differ only in how that gradient becomes a position update:
 
 ### Why Muon stays on CPU
 
-Muon's Newton-Schulz orthogonalisation requires computing `A = X @ Xᵀ` — a 2×2
-matrix formed by dot products across *all* N particles. This global reduction
-cannot run in a single Transform Feedback pass (each vertex invocation is
-independent). It would need a multi-pass compute approach or WebGPU compute
-shaders, which isn't worth the complexity for one optimizer variant.
+Muon's Newton-Schulz orthogonalisation requires computing `A = X @ Xᵀ` — a 2×2 matrix formed by dot
+products across *all* N particles. This global reduction cannot run in a single Transform Feedback
+pass (each vertex invocation is independent). It would need a multi-pass compute approach or WebGPU
+compute shaders, which isn't worth the complexity for one optimizer variant.
 
 ### Adam bias correction ordering
 
-The bias correction accumulators (`bc1Acc`, `bc2Acc`) must be multiplied by
-`beta1`/`beta2` *before* setting the `u_bc1 = 1 - bc1Acc` uniform. If set
-before multiplying, the first step has `u_bc1 = 0`, causing division by zero in
-the shader's `mHat = m / u_bc1`.
+The bias correction accumulators (`bc1Acc`, `bc2Acc`) must be multiplied by `beta1`/`beta2` *before*
+setting the `u_bc1 = 1 - bc1Acc` uniform. If set before multiplying, the first step has `u_bc1 = 0`,
+causing division by zero in the shader's `mHat = m / u_bc1`.
 
 ## Target generation — `targets.ts`
 
 Targets are generated by rasterisation, not hand-placement:
 
-1. **Text**: render the name to an offscreen canvas, scan for ink pixels (alpha >
-   128), and sample them down to the desired particle count. If there are fewer
-   ink pixels than particles, duplicates are scattered with sub-pixel jitter.
-2. **Logos**: load each SVG into an `Image`, draw to an offscreen canvas, and
-   sample ink pixels the same way.
-3. **Layout**: text is centred vertically; logos are laid out in a row below it.
-   All coordinates are in reference space.
-4. **Sorting**: all targets are sorted by x-coordinate so that the sorted-axis
-   particle-to-target assignment produces coherent fold-into-shape motion instead
-   of a scramble of crossing paths.
+1. **Text**: render the name to an offscreen canvas, scan for ink pixels (alpha > 128), and sample
+   them down to the desired particle count. If there are fewer ink pixels than particles, duplicates
+   are scattered with sub-pixel jitter.
+2. **Logos**: load each SVG into an `Image`, draw to an offscreen canvas, and sample ink pixels the
+   same way.
+3. **Layout**: text is centred vertically; logos are laid out in a row below it. All coordinates are
+   in reference space.
+4. **Sorting**: all targets are sorted by x-coordinate so that the sorted-axis particle-to-target
+   assignment produces coherent fold-into-shape motion instead of a scramble of crossing paths.
 
 ## Application orchestrator — `main.ts`
 
-- **Idle drift**: each particle has a small random velocity with jitter and
-  damping. Wrapping uses the full visible reference-space bounds (not just
-  `[0, REF_W]`) so particles cover the entire screen on non-16:9 displays.
-- **Reveal**: particles are sorted by x, paired with sorted targets by rank,
-  then the chosen optimizer runs. GPU-supported types branch into
-  `gpuHomingFrame()`, Muon uses `homingFrame()` with CPU stepping.
-- **Resolved**: particles snap to exact target positions, then micro-drift adds
-  life. Logo SVGs fade in as positioned `<a>` elements over the canvas.
+- **Idle drift**: each particle has a small random velocity with jitter and damping. Wrapping uses
+  the full visible reference-space bounds (not just `[0, REF_W]`) so particles cover the entire
+  screen on non-16:9 displays.
+- **Reveal**: particles are sorted by x, paired with sorted targets by rank, then the chosen
+  optimizer runs. GPU-supported types branch into `gpuHomingFrame()`, Muon uses `homingFrame()` with
+  CPU stepping.
+- **Resolved**: particles snap to exact target positions, then micro-drift adds life. Logo SVGs fade
+  in as positioned `<a>` elements over the canvas.
 - **Reset**: disposes GPU resources, re-initialises particles, returns to idle.
 
 ### FPS tracking
 
-A simple frame counter logs average FPS to the console every 2 seconds. Not
-displayed in the UI — it's a development diagnostic.
+A simple frame counter logs average FPS to the console every 2 seconds. Not displayed in the UI —
+it's a development diagnostic.
 
 ### Performance note (xorshift PRNG)
 
-The idle drift loop calls a random number generator for every particle every
-frame. `Math.random()` has measurable overhead at 100k+ calls per frame, so a
-deterministic xorshift128 PRNG is used instead (~3× faster, quality sufficient
-for visual jitter).
+The idle drift loop calls a random number generator for every particle every frame. `Math.random()`
+has measurable overhead at 100k+ calls per frame, so a deterministic xorshift128 PRNG is used
+instead (~3× faster, quality sufficient for visual jitter).
 
 ## Build & deploy
 
 - **Dev**: `npm run dev` — Vite dev server with HMR.
 - **Build**: `npm run build` — TypeScript check + Vite production build (< 30 kB).
-- **Docker**: multi-stage Dockerfile (Bun build → nginx:alpine). `docker compose up`
-  serves on port 8080.
+- **Docker**: multi-stage Dockerfile (Bun build → nginx:alpine). `docker compose up` serves on port
+  8080.
 
 ## Accessibility
 
-- Real name and links are in the DOM as semantic HTML (`<h1>`, `<nav>`, `<a>`),
-  visually hidden with `.sr-only`.
+- Real name and links are in the DOM as semantic HTML (`<h1>`, `<nav>`, `<a>`), visually hidden with
+  `.sr-only`.
 - `prefers-reduced-motion` skips all animation and shows a static fallback page.
 - `<noscript>` provides a JS-disabled message.
 - Canvas is `aria-hidden="true"` — it's decoration, not content.

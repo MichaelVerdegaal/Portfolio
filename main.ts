@@ -125,6 +125,11 @@ function init(): void {
     return;
   }
 
+  // Compute visible bounds before spawning particles — the renderer's resize()
+  // already set canvas.width/height, so we can derive the reference-space extent
+  // that covers the full viewport (matters on non-16:9 displays).
+  updateCachedTransform();
+
   initParticles();
   startIdleDrift();
 
