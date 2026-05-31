@@ -8,9 +8,9 @@ export default {
 
   // Font for rendering the name to sample target points
   font: {
-    family: 'Inter',
+    family: 'Manrope',
     weight: '700',
-    url: 'https://fonts.googleapis.com/css2?family=Inter:wght@700&display=swap',
+    url: 'https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap',
   },
 
   // Colour palette
@@ -33,7 +33,13 @@ export default {
 
   // Optimiser selection and parameters
   optimizer: {
-    type: 'pso', // 'pso' | 'adam' | 'sgd' | 'rmsprop' | 'muon'
+    type: 'muon', // 'pso' | 'adam' | 'sgd' | 'rmsprop' | 'muon'
+
+    muon: {
+      learningRate: 30,
+      momentum: 0.85,
+      nsSteps: 5,
+    },
 
     sgd: {
       learningRate: 0.0005,
@@ -62,11 +68,7 @@ export default {
       momentum: 0,
     },
 
-    muon: {
-      learningRate: 30,
-      momentum: 0.85,
-      nsSteps: 5,
-    },
+
   },
 
   // Reveal timing
