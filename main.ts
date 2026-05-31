@@ -11,6 +11,8 @@ import { generateTargets } from './targets';
 import type { Point, LogoPosition } from './targets';
 import { createOptimizer, setTotalSteps, optimizerStep, readPositions } from './optimizers';
 import type { OptimizerState } from './optimizers';
+import { createRenderer } from './renderer';
+import type { Renderer } from './renderer';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -26,7 +28,7 @@ type AppState = 'idle' | 'homing' | 'resolved';
 // ─── State ──────────────────────────────────────────────────────────────────
 
 let canvas: HTMLCanvasElement;
-let ctx: CanvasRenderingContext2D;
+let renderer: Renderer;
 let particles: Particle[] = [];
 let state: AppState = 'idle';
 let animationId: number | null = null;
@@ -69,30 +71,39 @@ function trackFps(): void {
 
 // ─── Reference → Screen transform ──────────────────────────────────────────
 
-/** Compute the uniform scale and centering offsets for reference → screen. */
-function getTransform(): { scale: number; offsetX: number; offsetY: number } {
+/** Cached transform — recomputed only on resize. */
+let cachedScale = 1;
+let cachedOffsetX = 0;
+let cachedOffsetY = 0;
+
+function updateCachedTransform(): void {
   const scaleX = canvas.width / REF_W;
   const scaleY = canvas.height / REF_H;
-  const scale = Math.min(scaleX, scaleY);
-  return {
-    scale,
-    offsetX: (canvas.width - REF_W * scale) / 2,
-    offsetY: (canvas.height - REF_H * scale) / 2,
-  };
+  cachedScale = Math.min(scaleX, scaleY);
+  cachedOffsetX = (canvas.width - REF_W * cachedScale) / 2;
+  cachedOffsetY = (canvas.height - REF_H * cachedScale) / 2;
 }
 
 /** Map a reference-space point to screen pixels. */
 function refToScreen(rx: number, ry: number): { x: number; y: number } {
-  const { scale, offsetX, offsetY } = getTransform();
-  return { x: rx * scale + offsetX, y: ry * scale + offsetY };
+  return { x: rx * cachedScale + cachedOffsetX, y: ry * cachedScale + cachedOffsetY };
 }
 
 // ─── Initialisation ─────────────────────────────────────────────────────────
 
 export function init(): void {
   canvas = document.getElementById('point-canvas') as HTMLCanvasElement;
-  ctx = canvas.getContext('2d')!;
-  resizeCanvas();
+
+  renderer = createRenderer({
+    canvas,
+    maxParticles: config.particles.count + 1000, // headroom for target mismatch
+    background: config.palette.background,
+    pointColor: config.palette.points,
+    pointAlpha: config.palette.pointsAlpha,
+    pointRadius: config.particles.radius,
+    refWidth: REF_W,
+    refHeight: REF_H,
+  });
 
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     showStaticFallback();
@@ -113,8 +124,8 @@ export function init(): void {
 }
 
 function resizeCanvas(): void {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  renderer.resize();
+  updateCachedTransform();
 }
 
 function handleResize(): void {
@@ -162,9 +173,23 @@ function startIdleDrift(): void {
   animationId = requestAnimationFrame(driftFrame);
 }
 
+// Fast xorshift128 PRNG — avoids overhead of Math.random() in hot loops
+let _s0 = 123456789 | 0;
+let _s1 = 362436069 | 0;
+let _s2 = 521288629 | 0;
+let _s3 = 88675123 | 0;
+function fastRandom(): number {
+  const t = _s3 ^ (_s3 << 11);
+  _s3 = _s2; _s2 = _s1; _s1 = _s0;
+  _s0 = (_s0 ^ (_s0 >>> 19)) ^ (t ^ (t >>> 8));
+  // Map to [0, 1) — use unsigned shift to get positive value
+  return (_s0 >>> 0) / 4294967296;
+}
+
 function updateDrift(): void {
   const speed = config.particles.driftSpeed;
   const margin = 50;
+  const jitter = 0.02 * speed;
 
   for (const p of particles) {
     p.x += p.vx;
@@ -176,8 +201,8 @@ function updateDrift(): void {
     if (p.y < -margin) p.y = REF_H + margin;
     if (p.y > REF_H + margin) p.y = -margin;
 
-    p.vx += (Math.random() - 0.5) * 0.02 * speed;
-    p.vy += (Math.random() - 0.5) * 0.02 * speed;
+    p.vx += (fastRandom() - 0.5) * jitter;
+    p.vy += (fastRandom() - 0.5) * jitter;
     p.vx *= 0.99;
     p.vy *= 0.99;
   }
@@ -186,40 +211,25 @@ function updateDrift(): void {
 // ─── Rendering ──────────────────────────────────────────────────────────────
 
 function renderParticles(): void {
-  // Clear the full canvas (in screen space)
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = config.palette.background;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  renderer.drawParticles(particles, particles.length);
+}
 
-  // Apply uniform scale transform: reference space → screen space
-  const { scale, offsetX, offsetY } = getTransform();
-  ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
-
-  const radius = config.particles.radius;
-  ctx.fillStyle = config.palette.points;
-  ctx.globalAlpha = config.palette.pointsAlpha;
-
-  ctx.beginPath();
-  for (const p of particles) {
-    ctx.moveTo(p.x + radius, p.y);
-    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-  }
-  ctx.fill();
-  ctx.globalAlpha = 1;
-
-  // Reset transform
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+/** Render directly from optimizer typed arrays — avoids the readPositions copy. */
+function renderFromArrays(px: Float64Array, py: Float64Array, n: number): void {
+  renderer.drawFromArrays(px, py, n);
 }
 
 // ─── Loss Display ───────────────────────────────────────────────────────────
 
-function computeLoss(): number {
-  if (!targetPositions) return 0;
+let lossFrameCounter = 0;
+let lastLoss = 0;
+
+/** Compute loss directly from optimizer typed arrays — avoids particle object access. */
+function computeLossFromArrays(px: Float64Array, py: Float64Array, tx: Float64Array, ty: Float64Array, n: number): number {
   let total = 0;
-  const n = particles.length;
   for (let i = 0; i < n; i++) {
-    const dx = particles[i].x - targetPositions[i].x;
-    const dy = particles[i].y - targetPositions[i].y;
+    const dx = px[i] - tx[i];
+    const dy = py[i] - ty[i];
     total += dx * dx + dy * dy;
   }
   return total / n;
@@ -303,23 +313,29 @@ function homingFrame(): void {
     homingStep++;
   }
 
-  // Copy positions from optimiser into particles for rendering
-  readPositions(optimizer!, particles);
-  renderParticles();
+  // Render directly from optimizer arrays — skip readPositions copy
+  renderFromArrays(optimizer!.px, optimizer!.py, optimizer!.n);
 
-  // Update loss display
-  const loss = computeLoss();
-  updateLossDisplay(loss);
+  // Throttle loss computation to every 10th frame
+  lossFrameCounter++;
+  if (lossFrameCounter >= 10) {
+    lossFrameCounter = 0;
+    lastLoss = computeLossFromArrays(optimizer!.px, optimizer!.py, optimizer!.tx, optimizer!.ty, optimizer!.n);
+    updateLossDisplay(lastLoss);
+  }
   trackFps();
 
-  // Check convergence
-  if (loss < 0.01) {
+  // Check convergence (using last computed loss)
+  if (lastLoss < 0.01 && lossFrameCounter === 0) {
+    // Copy final positions to particles for resolved state
+    readPositions(optimizer!, particles);
     resolveHoming();
     return;
   }
 
   // Safety: resolve after exceeding step budget
   if (homingStep > totalHomingSteps * 2) {
+    readPositions(optimizer!, particles);
     resolveHoming();
     return;
   }
@@ -351,7 +367,7 @@ function fadeInLogos(): void {
 
     // Convert reference-space logo rect to screen pixels
     const screenTopLeft = refToScreen(pos.x, pos.y);
-    const { scale } = getTransform();
+    const scale = cachedScale;
 
     const a = document.createElement('a');
     a.href = logo.href;
@@ -382,10 +398,17 @@ function renderLoop(): void {
   resolvedTime += 0.01;
   if (resolvedPositions) {
     const amp = 0.3;
-    for (let i = 0; i < particles.length; i++) {
-      const phase = i * 0.01 + resolvedTime;
-      particles[i].x = resolvedPositions[i].x + Math.sin(phase) * amp;
-      particles[i].y = resolvedPositions[i].y + Math.cos(phase * 0.7) * amp;
+    const t = resolvedTime;
+    // Use a cheap triangle-wave approximation instead of sin/cos per particle
+    // sin(x) ≈ triangle wave with same period, indistinguishable at 0.3px amplitude
+    const n = particles.length;
+    for (let i = 0; i < n; i++) {
+      const phase = i * 0.01 + t;
+      // Wrap to [0, 2π], then cheap triangle wave in [-1, 1]
+      const px = ((phase % 6.2832) / 3.1416) - 1; // [-1, 1]
+      const py = (((phase * 0.7) % 6.2832) / 3.1416) - 1;
+      particles[i].x = resolvedPositions[i].x + px * amp;
+      particles[i].y = resolvedPositions[i].y + py * amp;
     }
   }
 
@@ -397,7 +420,7 @@ function renderLoop(): void {
 function positionLogoOverlays(): void {
   if (!logoPositions || logoElements.length === 0) return;
 
-  const { scale } = getTransform();
+  const scale = cachedScale;
 
   logoElements.forEach((el, i) => {
     const pos = logoPositions![i];

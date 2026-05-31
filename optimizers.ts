@@ -27,12 +27,15 @@ export interface OptimizerState {
   beta1: number;
   beta2: number;
   epsilon: number;
+  bc1Acc: number;
+  bc2Acc: number;
   // PSO
   inertiaStart: number;
   inertiaEnd: number;
   cognitive: number;
   social: number;
   maxSpeed: number;
+  maxSpeedSq: number;
   centroidX: number;
   centroidY: number;
   // RMSProp
@@ -92,6 +95,8 @@ export function createOptimizer(particles: Point[], targets: Point[], optimizerC
     state.beta1 = cfg.beta1;
     state.beta2 = cfg.beta2;
     state.epsilon = cfg.epsilon;
+    state.bc1Acc = 1;
+    state.bc2Acc = 1;
     state.mx = new Float64Array(n);
     state.my = new Float64Array(n);
     state.vx = new Float64Array(n);
@@ -103,6 +108,7 @@ export function createOptimizer(particles: Point[], targets: Point[], optimizerC
     state.cognitive = cfg.cognitive;
     state.social = cfg.social;
     state.maxSpeed = cfg.maxSpeed;
+    state.maxSpeedSq = cfg.maxSpeed * cfg.maxSpeed;
     state.vx = new Float64Array(n);
     state.vy = new Float64Array(n);
     let cx = 0, cy = 0;
@@ -179,12 +185,14 @@ function stepSGD(s: OptimizerState): void {
 // ─── Adam ───────────────────────────────────────────────────────────────────
 
 function stepAdam(s: OptimizerState): void {
-  const { n, px, py, tx, ty, mx, my, vx, vy, lr, beta1, beta2, epsilon, gain, step } = s;
+  const { n, px, py, tx, ty, mx, my, vx, vy, lr, beta1, beta2, epsilon, gain } = s;
   const effLr = lr * gain;
 
-  // Bias corrections computed once per step (all particles share the same count)
-  const bc1 = 1 - Math.pow(beta1, step + 1);
-  const bc2 = 1 - Math.pow(beta2, step + 1);
+  // Incremental bias correction — avoids Math.pow per step
+  s.bc1Acc *= beta1;
+  s.bc2Acc *= beta2;
+  const bc1 = 1 - s.bc1Acc;
+  const bc2 = 1 - s.bc2Acc;
 
   for (let i = 0; i < n; i++) {
     const gx = px[i] - tx[i];
@@ -209,7 +217,7 @@ function stepAdam(s: OptimizerState): void {
 // ─── PSO ────────────────────────────────────────────────────────────────────
 
 function stepPSO(s: OptimizerState): void {
-  const { n, px, py, tx, ty, vx, vy, cognitive, social, maxSpeed,
+  const { n, px, py, tx, ty, vx, vy, cognitive, social, maxSpeed, maxSpeedSq,
           inertiaStart, inertiaEnd, progress, gain, centroidX, centroidY } = s;
 
   // Anneal inertia from start to end over the reveal.
@@ -235,10 +243,10 @@ function stepPSO(s: OptimizerState): void {
            + cog * r1 * (ty[i] - py[i])
            + soc * r2 * (centroidY - py[i]);
 
-    // Clamp velocity
-    const speed = Math.sqrt(vx[i] * vx[i] + vy[i] * vy[i]);
-    if (speed > maxSpeed) {
-      const scale = maxSpeed / speed;
+    // Clamp velocity — skip sqrt when speed² is within bounds
+    const speedSq = vx[i] * vx[i] + vy[i] * vy[i];
+    if (speedSq > maxSpeedSq) {
+      const scale = maxSpeed / Math.sqrt(speedSq);
       vx[i] *= scale;
       vy[i] *= scale;
     }
@@ -253,22 +261,25 @@ function stepPSO(s: OptimizerState): void {
 function stepRMSProp(s: OptimizerState): void {
   const { n, px, py, tx, ty, vx, vy, bx, by, lr, alpha, epsilon, mom, gain } = s;
   const effLr = lr * gain;
+  const oneMinusAlpha = 1 - alpha;
 
-  for (let i = 0; i < n; i++) {
-    const gx = px[i] - tx[i];
-    const gy = py[i] - ty[i];
-
-    // Running average of squared gradient
-    vx[i] = alpha * vx[i] + (1 - alpha) * gx * gx;
-    vy[i] = alpha * vy[i] + (1 - alpha) * gy * gy;
-
-    if (mom > 0) {
-      // Momentum variant
+  if (mom > 0) {
+    for (let i = 0; i < n; i++) {
+      const gx = px[i] - tx[i];
+      const gy = py[i] - ty[i];
+      vx[i] = alpha * vx[i] + oneMinusAlpha * gx * gx;
+      vy[i] = alpha * vy[i] + oneMinusAlpha * gy * gy;
       bx[i] = mom * bx[i] + gx / (Math.sqrt(vx[i]) + epsilon);
       by[i] = mom * by[i] + gy / (Math.sqrt(vy[i]) + epsilon);
       px[i] -= effLr * bx[i];
       py[i] -= effLr * by[i];
-    } else {
+    }
+  } else {
+    for (let i = 0; i < n; i++) {
+      const gx = px[i] - tx[i];
+      const gy = py[i] - ty[i];
+      vx[i] = alpha * vx[i] + oneMinusAlpha * gx * gx;
+      vy[i] = alpha * vy[i] + oneMinusAlpha * gy * gy;
       px[i] -= effLr * gx / (Math.sqrt(vx[i]) + epsilon);
       py[i] -= effLr * gy / (Math.sqrt(vy[i]) + epsilon);
     }
@@ -319,17 +330,17 @@ function stepMuon(s: OptimizerState): void {
     const aa01 = a00 * a01 + a01 * a11;
     const aa11 = a01 * a01 + a11 * a11;
 
-    const b00 = cb * a00 + cc * aa00;
-    const b01 = cb * a01 + cc * aa01;
-    const b10 = b01; // symmetric
-    const b11 = cb * a11 + cc * aa11;
+    // Precompute combined coefficients: X ← (ca + b_diag)·X + b_off·X_other
+    const c00 = ca + cb * a00 + cc * aa00;
+    const c01 = cb * a01 + cc * aa01;
+    const c11 = ca + cb * a11 + cc * aa11;
 
-    // X ← ca·X + B·X  (2×N)
+    // X ← C·X  (2×N) — fused diagonal + off-diagonal in one pass
     for (let i = 0; i < n; i++) {
-      const tmp0 = ca * nsX0[i] + b00 * nsX0[i] + b01 * nsX1[i];
-      const tmp1 = ca * nsX1[i] + b10 * nsX0[i] + b11 * nsX1[i];
-      nsX0[i] = tmp0;
-      nsX1[i] = tmp1;
+      const x0 = nsX0[i];
+      const x1 = nsX1[i];
+      nsX0[i] = c00 * x0 + c01 * x1;
+      nsX1[i] = c01 * x0 + c11 * x1;
     }
   }
 
