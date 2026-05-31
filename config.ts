@@ -53,7 +53,7 @@ const config: Config = {
   },
 
   particles: {
-    count: 50000,
+    count: 100000,
     radius: 0.8,
     driftSpeed: 0.3,
   },

@@ -9,19 +9,12 @@ import config from './config';
 import type { OptimizerType } from './config';
 import { generateTargets } from './targets';
 import type { Point, LogoPosition } from './targets';
-import { createOptimizer, setTotalSteps, optimizerStep, readPositions } from './optimizers';
+import { createOptimizer, setTotalSteps, optimizerStep } from './optimizers';
 import type { OptimizerState } from './optimizers';
 import { createRenderer } from './renderer';
 import type { Renderer } from './renderer';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
-
-interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-}
 
 type AppState = 'idle' | 'homing' | 'resolved';
 
@@ -29,7 +22,12 @@ type AppState = 'idle' | 'homing' | 'resolved';
 
 let canvas: HTMLCanvasElement;
 let renderer: Renderer;
-let particles: Particle[] = [];
+// Particle state as parallel Float32Arrays — zero-copy GPU uploads
+let particleX = new Float32Array(0);
+let particleY = new Float32Array(0);
+let particleVX = new Float32Array(0);
+let particleVY = new Float32Array(0);
+let particleCount = 0;
 let state: AppState = 'idle';
 let animationId: number | null = null;
 
@@ -48,7 +46,8 @@ let totalHomingSteps = 0;
 let logoElements: HTMLAnchorElement[] = [];
 
 // Post-convergence micro-drift
-let resolvedPositions: Point[] | null = null;
+let resolvedX: Float32Array | null = null;
+let resolvedY: Float32Array | null = null;
 let resolvedTime = 0;
 
 // ─── FPS tracking ───────────────────────────────────────────────────────────
@@ -141,14 +140,17 @@ function handleResize(): void {
 
 function initParticles(): void {
   const count = getParticleCount();
-  particles = [];
+  particleCount = count;
+  particleX = new Float32Array(count);
+  particleY = new Float32Array(count);
+  particleVX = new Float32Array(count);
+  particleVY = new Float32Array(count);
+  const speed = config.particles.driftSpeed;
   for (let i = 0; i < count; i++) {
-    particles.push({
-      x: Math.random() * REF_W,
-      y: Math.random() * REF_H,
-      vx: (Math.random() - 0.5) * config.particles.driftSpeed,
-      vy: (Math.random() - 0.5) * config.particles.driftSpeed,
-    });
+    particleX[i] = Math.random() * REF_W;
+    particleY[i] = Math.random() * REF_H;
+    particleVX[i] = (Math.random() - 0.5) * speed;
+    particleVY[i] = (Math.random() - 0.5) * speed;
   }
 }
 
@@ -187,36 +189,29 @@ function fastRandom(): number {
 }
 
 function updateDrift(): void {
-  const speed = config.particles.driftSpeed;
   const margin = 50;
-  const jitter = 0.02 * speed;
+  const jitter = 0.02 * config.particles.driftSpeed;
+  const n = particleCount;
+  for (let i = 0; i < n; i++) {
+    particleX[i] += particleVX[i];
+    particleY[i] += particleVY[i];
 
-  for (const p of particles) {
-    p.x += p.vx;
-    p.y += p.vy;
+    if (particleX[i] < -margin) particleX[i] = REF_W + margin;
+    if (particleX[i] > REF_W + margin) particleX[i] = -margin;
+    if (particleY[i] < -margin) particleY[i] = REF_H + margin;
+    if (particleY[i] > REF_H + margin) particleY[i] = -margin;
 
-    // Wrap in reference space
-    if (p.x < -margin) p.x = REF_W + margin;
-    if (p.x > REF_W + margin) p.x = -margin;
-    if (p.y < -margin) p.y = REF_H + margin;
-    if (p.y > REF_H + margin) p.y = -margin;
-
-    p.vx += (fastRandom() - 0.5) * jitter;
-    p.vy += (fastRandom() - 0.5) * jitter;
-    p.vx *= 0.99;
-    p.vy *= 0.99;
+    particleVX[i] += (fastRandom() - 0.5) * jitter;
+    particleVY[i] += (fastRandom() - 0.5) * jitter;
+    particleVX[i] *= 0.99;
+    particleVY[i] *= 0.99;
   }
 }
 
 // ─── Rendering ──────────────────────────────────────────────────────────────
 
 function renderParticles(): void {
-  renderer.drawParticles(particles, particles.length);
-}
-
-/** Render directly from optimizer typed arrays — avoids the readPositions copy. */
-function renderFromArrays(px: Float64Array, py: Float64Array, n: number): void {
-  renderer.drawFromArrays(px, py, n);
+  renderer.drawFromArrays(particleX, particleY, particleCount);
 }
 
 // ─── Loss Display ───────────────────────────────────────────────────────────
@@ -224,8 +219,8 @@ function renderFromArrays(px: Float64Array, py: Float64Array, n: number): void {
 let lossFrameCounter = 0;
 let lastLoss = 0;
 
-/** Compute loss directly from optimizer typed arrays — avoids particle object access. */
-function computeLossFromArrays(px: Float64Array, py: Float64Array, tx: Float64Array, ty: Float64Array, n: number): number {
+/** Compute loss directly from optimizer typed arrays. */
+function computeLossFromArrays(px: Float32Array, py: Float32Array, tx: Float32Array, ty: Float32Array, n: number): number {
   let total = 0;
   for (let i = 0; i < n; i++) {
     const dx = px[i] - tx[i];
@@ -272,35 +267,98 @@ async function startReveal(): Promise<void> {
   if (animationId) cancelAnimationFrame(animationId);
 
   // Generate targets in reference space
-  const result = await generateTargets(config, particles.length);
+  const result = await generateTargets(config, particleCount);
   targetPositions = result.targets;
   logoPositions = result.logoPositions;
 
   // Match particle count to target count
-  while (particles.length < targetPositions.length) {
-    particles.push({
-      x: Math.random() * REF_W,
-      y: Math.random() * REF_H,
-      vx: 0,
-      vy: 0,
-    });
-  }
-  while (particles.length > targetPositions.length) {
-    particles.pop();
+  const targetN = targetPositions!.length;
+  if (targetN !== particleCount) {
+    const newX = new Float32Array(targetN);
+    const newY = new Float32Array(targetN);
+    newX.set(particleX.subarray(0, Math.min(particleCount, targetN)));
+    newY.set(particleY.subarray(0, Math.min(particleCount, targetN)));
+    for (let i = particleCount; i < targetN; i++) {
+      newX[i] = Math.random() * REF_W;
+      newY[i] = Math.random() * REF_H;
+    }
+    particleX = newX;
+    particleY = newY;
+    particleVX = new Float32Array(targetN);
+    particleVY = new Float32Array(targetN);
+    particleCount = targetN;
   }
 
   // Sort particles by x for sorted-axis assignment (reduces crossing paths)
-  particles.sort((a, b) => a.x - b.x || a.y - b.y);
+  const sortIdx = new Int32Array(particleCount);
+  for (let i = 0; i < particleCount; i++) sortIdx[i] = i;
+  sortIdx.sort((a, b) => particleX[a] - particleX[b] || particleY[a] - particleY[b]);
+  const sortedX = new Float32Array(particleCount);
+  const sortedY = new Float32Array(particleCount);
+  for (let i = 0; i < particleCount; i++) {
+    sortedX[i] = particleX[sortIdx[i]];
+    sortedY[i] = particleY[sortIdx[i]];
+  }
+  particleX.set(sortedX);
+  particleY.set(sortedY);
 
   // Create optimiser
   const stepsPerFrame = config.reveal.stepsPerFrame;
   const fps = 60;
   totalHomingSteps = config.reveal.durationSeconds * fps * stepsPerFrame;
-  optimizer = createOptimizer(particles, targetPositions, config.optimizer);
-  setTotalSteps(optimizer, totalHomingSteps);
   homingStep = 0;
 
-  homingFrame();
+  const optType = config.optimizer.type;
+
+  if (renderer.supportsGPU(optType)) {
+    // GPU Transform Feedback path — zero per-frame CPU→GPU upload
+    const txArray = new Float32Array(particleCount);
+    const tyArray = new Float32Array(particleCount);
+    for (let i = 0; i < particleCount; i++) {
+      txArray[i] = targetPositions![i].x;
+      tyArray[i] = targetPositions![i].y;
+    }
+    const params = config.optimizer[optType] as unknown as Record<string, number>;
+    renderer.initHoming(
+      particleX, particleY, txArray, tyArray,
+      particleCount, optType, params, totalHomingSteps,
+    );
+    gpuHomingFrame();
+  } else {
+    // CPU fallback (Muon or unsupported type)
+    optimizer = createOptimizer(particleX, particleY, targetPositions!, config.optimizer);
+    setTotalSteps(optimizer, totalHomingSteps);
+    homingFrame();
+  }
+}
+
+function gpuHomingFrame(): void {
+  if (state !== 'homing') return;
+
+  const stepsPerFrame = config.reveal.stepsPerFrame;
+  renderer.stepAndDraw(stepsPerFrame);
+  homingStep += stepsPerFrame;
+
+  // Progress display (throttled)
+  lossFrameCounter++;
+  if (lossFrameCounter >= 10) {
+    lossFrameCounter = 0;
+    const pct = Math.min(100, (homingStep / totalHomingSteps) * 100);
+    const name = config.optimizer.type.toUpperCase();
+    const el = document.getElementById('loss-counter');
+    if (el) {
+      el.textContent = `${name} [GPU] · ${pct.toFixed(1)}%`;
+      el.style.opacity = '1';
+    }
+  }
+  trackFps();
+
+  if (homingStep >= totalHomingSteps) {
+    resolveHoming();
+    return;
+  }
+
+  animationId = requestAnimationFrame(gpuHomingFrame);
 }
 
 function homingFrame(): void {
@@ -313,8 +371,8 @@ function homingFrame(): void {
     homingStep++;
   }
 
-  // Render directly from optimizer arrays — skip readPositions copy
-  renderFromArrays(optimizer!.px, optimizer!.py, optimizer!.n);
+  // Render directly from optimizer arrays — Float32Array, zero-copy
+  renderer.drawFromArrays(optimizer!.px, optimizer!.py, optimizer!.n);
 
   // Throttle loss computation to every 10th frame
   lossFrameCounter++;
@@ -327,15 +385,12 @@ function homingFrame(): void {
 
   // Check convergence (using last computed loss)
   if (lastLoss < 0.01 && lossFrameCounter === 0) {
-    // Copy final positions to particles for resolved state
-    readPositions(optimizer!, particles);
     resolveHoming();
     return;
   }
 
   // Safety: resolve after exceeding step budget
   if (homingStep > totalHomingSteps * 2) {
-    readPositions(optimizer!, particles);
     resolveHoming();
     return;
   }
@@ -345,12 +400,15 @@ function homingFrame(): void {
 
 function resolveHoming(): void {
   state = 'resolved';
+  renderer.disposeHoming();
   // Snap to targets for crispness
-  for (let i = 0; i < particles.length; i++) {
-    particles[i].x = targetPositions![i].x;
-    particles[i].y = targetPositions![i].y;
+  const targets = targetPositions!;
+  for (let i = 0; i < particleCount; i++) {
+    particleX[i] = targets[i].x;
+    particleY[i] = targets[i].y;
   }
-  resolvedPositions = particles.map(p => ({ x: p.x, y: p.y }));
+  resolvedX = new Float32Array(particleX.subarray(0, particleCount));
+  resolvedY = new Float32Array(particleY.subarray(0, particleCount));
   fadeInLogos();
 }
 
@@ -396,23 +454,20 @@ function renderLoop(): void {
 
   // Subtle micro-drift around settled positions
   resolvedTime += 0.01;
-  if (resolvedPositions) {
+  if (resolvedX && resolvedY) {
     const amp = 0.3;
     const t = resolvedTime;
-    // Use a cheap triangle-wave approximation instead of sin/cos per particle
-    // sin(x) ≈ triangle wave with same period, indistinguishable at 0.3px amplitude
-    const n = particles.length;
+    const n = particleCount;
     for (let i = 0; i < n; i++) {
       const phase = i * 0.01 + t;
-      // Wrap to [0, 2π], then cheap triangle wave in [-1, 1]
-      const px = ((phase % 6.2832) / 3.1416) - 1; // [-1, 1]
-      const py = (((phase * 0.7) % 6.2832) / 3.1416) - 1;
-      particles[i].x = resolvedPositions[i].x + px * amp;
-      particles[i].y = resolvedPositions[i].y + py * amp;
+      const dpx = ((phase % 6.2832) / 3.1416) - 1;
+      const dpy = (((phase * 0.7) % 6.2832) / 3.1416) - 1;
+      particleX[i] = resolvedX[i] + dpx * amp;
+      particleY[i] = resolvedY[i] + dpy * amp;
     }
   }
 
-  renderParticles();
+  renderer.drawFromArrays(particleX, particleY, particleCount);
   trackFps();
   animationId = requestAnimationFrame(renderLoop);
 }
@@ -452,10 +507,12 @@ function resetSimulation(): void {
   animationId = null;
 
   state = 'idle';
+  renderer.disposeHoming();
   optimizer = null;
   targetPositions = null;
   logoPositions = null;
-  resolvedPositions = null;
+  resolvedX = null;
+  resolvedY = null;
   homingStep = 0;
   resolvedTime = 0;
   hideLossDisplay();

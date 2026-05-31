@@ -7,23 +7,23 @@ export type { Point };
 export interface OptimizerState {
   type: OptimizerType;
   n: number;
-  px: Float64Array;
-  py: Float64Array;
-  tx: Float64Array;
-  ty: Float64Array;
+  px: Float32Array;
+  py: Float32Array;
+  tx: Float32Array;
+  ty: Float32Array;
   step: number;
   totalSteps: number;
   progress: number;
   gain: number;
   // Shared velocity / moment buffers (SGD, Adam, PSO, RMSProp)
-  vx: Float64Array;
-  vy: Float64Array;
+  vx: Float32Array;
+  vy: Float32Array;
   // SGD / Muon
   lr: number;
   momentum: number;
   // Adam
-  mx: Float64Array;
-  my: Float64Array;
+  mx: Float32Array;
+  my: Float32Array;
   beta1: number;
   beta2: number;
   epsilon: number;
@@ -41,14 +41,14 @@ export interface OptimizerState {
   // RMSProp
   alpha: number;
   mom: number;
-  bx: Float64Array;
-  by: Float64Array;
+  bx: Float32Array;
+  by: Float32Array;
   // Muon
   nsSteps: number;
-  bufX: Float64Array;
-  bufY: Float64Array;
-  nsX0: Float64Array;
-  nsX1: Float64Array;
+  bufX: Float32Array;
+  bufY: Float32Array;
+  nsX0: Float32Array;
+  nsX1: Float32Array;
 }
 
 const SETTLE_START = 0.95;
@@ -59,26 +59,26 @@ function settleGain(progress: number): number {
   return 0.5 * (1 + Math.cos(Math.PI * Math.min(1, t)));
 }
 
-export function createOptimizer(particles: Point[], targets: Point[], optimizerConfig: Config['optimizer']): OptimizerState {
-  const n = particles.length;
+export function createOptimizer(px: Float32Array, py: Float32Array, targets: Point[], optimizerConfig: Config['optimizer']): OptimizerState {
+  const n = px.length;
   const type = optimizerConfig.type;
 
   const state = {
     type,
     n,
-    px: new Float64Array(n),
-    py: new Float64Array(n),
-    tx: new Float64Array(n),
-    ty: new Float64Array(n),
+    px: new Float32Array(n),
+    py: new Float32Array(n),
+    tx: new Float32Array(n),
+    ty: new Float32Array(n),
     step: 0,
     totalSteps: 0,
     progress: 0,
     gain: 1,
   } as OptimizerState;
 
+  state.px.set(px);
+  state.py.set(py);
   for (let i = 0; i < n; i++) {
-    state.px[i] = particles[i].x;
-    state.py[i] = particles[i].y;
     state.tx[i] = targets[i].x;
     state.ty[i] = targets[i].y;
   }
@@ -87,8 +87,8 @@ export function createOptimizer(particles: Point[], targets: Point[], optimizerC
     const cfg = optimizerConfig.sgd;
     state.lr = cfg.learningRate;
     state.momentum = cfg.momentum;
-    state.vx = new Float64Array(n);
-    state.vy = new Float64Array(n);
+    state.vx = new Float32Array(n);
+    state.vy = new Float32Array(n);
   } else if (type === 'adam') {
     const cfg = optimizerConfig.adam;
     state.lr = cfg.learningRate;
@@ -97,10 +97,10 @@ export function createOptimizer(particles: Point[], targets: Point[], optimizerC
     state.epsilon = cfg.epsilon;
     state.bc1Acc = 1;
     state.bc2Acc = 1;
-    state.mx = new Float64Array(n);
-    state.my = new Float64Array(n);
-    state.vx = new Float64Array(n);
-    state.vy = new Float64Array(n);
+    state.mx = new Float32Array(n);
+    state.my = new Float32Array(n);
+    state.vx = new Float32Array(n);
+    state.vy = new Float32Array(n);
   } else if (type === 'pso') {
     const cfg = optimizerConfig.pso;
     state.inertiaStart = cfg.inertiaStart;
@@ -109,8 +109,8 @@ export function createOptimizer(particles: Point[], targets: Point[], optimizerC
     state.social = cfg.social;
     state.maxSpeed = cfg.maxSpeed;
     state.maxSpeedSq = cfg.maxSpeed * cfg.maxSpeed;
-    state.vx = new Float64Array(n);
-    state.vy = new Float64Array(n);
+    state.vx = new Float32Array(n);
+    state.vy = new Float32Array(n);
     let cx = 0, cy = 0;
     for (let i = 0; i < n; i++) {
       cx += state.tx[i];
@@ -124,19 +124,19 @@ export function createOptimizer(particles: Point[], targets: Point[], optimizerC
     state.alpha = cfg.alpha;
     state.epsilon = cfg.epsilon;
     state.mom = cfg.momentum;
-    state.vx = new Float64Array(n);
-    state.vy = new Float64Array(n);
-    state.bx = new Float64Array(n);
-    state.by = new Float64Array(n);
+    state.vx = new Float32Array(n);
+    state.vy = new Float32Array(n);
+    state.bx = new Float32Array(n);
+    state.by = new Float32Array(n);
   } else if (type === 'muon') {
     const cfg = optimizerConfig.muon;
     state.lr = cfg.learningRate;
     state.momentum = cfg.momentum;
     state.nsSteps = cfg.nsSteps;
-    state.bufX = new Float64Array(n);
-    state.bufY = new Float64Array(n);
-    state.nsX0 = new Float64Array(n);
-    state.nsX1 = new Float64Array(n);
+    state.bufX = new Float32Array(n);
+    state.bufY = new Float32Array(n);
+    state.nsX0 = new Float32Array(n);
+    state.nsX1 = new Float32Array(n);
   }
 
   return state;
@@ -354,9 +354,7 @@ function stepMuon(s: OptimizerState): void {
 /**
  * Copy optimiser positions back into particle objects for rendering.
  */
-export function readPositions(state: OptimizerState, particles: Point[]): void {
-  for (let i = 0; i < state.n; i++) {
-    particles[i].x = state.px[i];
-    particles[i].y = state.py[i];
-  }
+export function readPositions(state: OptimizerState, outX: Float32Array, outY: Float32Array): void {
+  outX.set(state.px);
+  outY.set(state.py);
 }
