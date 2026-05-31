@@ -1,7 +1,35 @@
 /**
  * Per-particle optimisers: SGD with momentum, Adam, and PSO.
  * All work in canvas pixel space. No normalisation needed.
+ *
+ * Settling: at a constant step size none of these lands cleanly on its target.
+ * Adam keeps stepping at roughly its learning rate even as the gradient vanishes
+ * (the m/sqrt(v) ratio tends to sign(g)), so it oscillates at an lr-scale
+ * amplitude; PSO redraws r1/r2 every step, so its stochastic forcing never dies
+ * and it holds a noisy floor. Both read on screen as fuzzy, thickened glyphs.
+ * The fix is a single shared schedule: hold the step size at full strength while
+ * the cloud travels, then taper it to zero over the back of the reveal. As the
+ * step goes to zero the oscillation amplitude collapses with it and every
+ * particle coasts onto its target, where the caller's convergence snap takes over.
  */
+
+// Fraction of the reveal spent at full step size before the taper to a stop begins.
+const SETTLE_START = 0.98;
+
+/**
+ * Global settle gain over the reveal: 1.0 until SETTLE_START, then a cosine
+ * taper to 0.0 by the end. Each optimiser multiplies its driving term (learning
+ * rate, or the PSO force coefficients) by this so the motion stops on target
+ * instead of orbiting it.
+ *
+ * @param {number} progress step / totalSteps, clamped to [0, 1].
+ * @returns {number} Gain in [0, 1].
+ */
+function settleGain(progress) {
+  if (progress <= SETTLE_START) return 1;
+  const t = (progress - SETTLE_START) / (1 - SETTLE_START);
+  return 0.5 * (1 + Math.cos(Math.PI * Math.min(1, t)));
+}
 
 /**
  * Create optimiser state for each particle.
@@ -27,6 +55,9 @@ export function createOptimizer(particles, targets, optimizerConfig) {
     ty: new Float64Array(n),
     step: 0,
     totalSteps: 0,
+    // Reveal progress and settle gain, refreshed each step in optimizerStep.
+    progress: 0,
+    gain: 1,
   };
 
   for (let i = 0; i < n; i++) {
@@ -91,6 +122,10 @@ export function setTotalSteps(state, totalSteps) {
  * Run one optimiser step for all particles.
  */
 export function optimizerStep(state) {
+  // Refresh reveal progress and the shared settle gain before stepping.
+  state.progress = state.totalSteps > 0 ? Math.min(1, state.step / state.totalSteps) : 0;
+  state.gain = settleGain(state.progress);
+
   switch (state.type) {
     case 'sgd': stepSGD(state); break;
     case 'adam': stepAdam(state); break;
@@ -102,12 +137,13 @@ export function optimizerStep(state) {
 // ─── SGD with Momentum ─────────────────────────────────────────────────────
 
 function stepSGD(s) {
-  const { n, px, py, tx, ty, vx, vy, lr, momentum } = s;
+  const { n, px, py, tx, ty, vx, vy, lr, momentum, gain } = s;
+  const effLr = lr * gain;
   for (let i = 0; i < n; i++) {
     const gx = px[i] - tx[i];
     const gy = py[i] - ty[i];
-    vx[i] = momentum * vx[i] - lr * gx;
-    vy[i] = momentum * vy[i] - lr * gy;
+    vx[i] = momentum * vx[i] - effLr * gx;
+    vy[i] = momentum * vy[i] - effLr * gy;
     px[i] += vx[i];
     py[i] += vy[i];
   }
@@ -116,7 +152,8 @@ function stepSGD(s) {
 // ─── Adam ───────────────────────────────────────────────────────────────────
 
 function stepAdam(s) {
-  const { n, px, py, tx, ty, mx, my, vx, vy, t, lr, beta1, beta2, epsilon } = s;
+  const { n, px, py, tx, ty, mx, my, vx, vy, t, lr, beta1, beta2, epsilon, gain } = s;
+  const effLr = lr * gain;
   for (let i = 0; i < n; i++) {
     t[i]++;
     const gx = px[i] - tx[i];
@@ -138,9 +175,9 @@ function stepAdam(s) {
     const vxHat = vx[i] / bc2;
     const vyHat = vy[i] / bc2;
 
-    // Step
-    px[i] -= lr * mxHat / (Math.sqrt(vxHat) + epsilon);
-    py[i] -= lr * myHat / (Math.sqrt(vyHat) + epsilon);
+    // Step, scaled by the settle gain so the lr-scale jitter dies at the end.
+    px[i] -= effLr * mxHat / (Math.sqrt(vxHat) + epsilon);
+    py[i] -= effLr * myHat / (Math.sqrt(vyHat) + epsilon);
   }
 }
 
@@ -148,25 +185,28 @@ function stepAdam(s) {
 
 function stepPSO(s) {
   const { n, px, py, tx, ty, vx, vy, cognitive, social, maxSpeed,
-          inertiaStart, inertiaEnd, step, totalSteps, centroidX, centroidY } = s;
+          inertiaStart, inertiaEnd, progress, gain, centroidX, centroidY } = s;
 
-  // Anneal inertia from start to end over the reveal
-  const progress = totalSteps > 0 ? Math.min(1, step / totalSteps) : 0;
+  // Anneal inertia from start to end over the reveal.
   const inertia = inertiaStart + (inertiaEnd - inertiaStart) * progress;
 
-  // Fade social weight out over the reveal
-  const socialWeight = social * (1 - progress * 0.8);
+  // Social fully fades to zero, so the swarm settles on the true targets rather
+  // than on a version contracted toward the centroid. The settle gain then
+  // tapers both forces to zero so inertia damps the residual velocity to a stop.
+  const socialWeight = social * (1 - progress);
+  const cog = cognitive * gain;
+  const soc = socialWeight * gain;
 
   for (let i = 0; i < n; i++) {
     const r1 = Math.random();
     const r2 = Math.random();
 
     vx[i] = inertia * vx[i]
-           + cognitive * r1 * (tx[i] - px[i])
-           + socialWeight * r2 * (centroidX - px[i]);
+           + cog * r1 * (tx[i] - px[i])
+           + soc * r2 * (centroidX - px[i]);
     vy[i] = inertia * vy[i]
-           + cognitive * r1 * (ty[i] - py[i])
-           + socialWeight * r2 * (centroidY - py[i]);
+           + cog * r1 * (ty[i] - py[i])
+           + soc * r2 * (centroidY - py[i]);
 
     // Clamp velocity
     const speed = Math.sqrt(vx[i] * vx[i] + vy[i] * vy[i]);

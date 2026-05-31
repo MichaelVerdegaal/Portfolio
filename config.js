@@ -27,7 +27,7 @@ export default {
   // Particle system
   particles: {
     count: 20000,
-    radius: 0.5,
+    radius: 0.8,
     driftSpeed: 0.3,
   },
 
