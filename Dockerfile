@@ -1,15 +1,16 @@
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
 FROM nginx:alpine
 
 RUN rm -rf /usr/share/nginx/html/* /etc/nginx/conf.d/default.conf
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-COPY index.html /usr/share/nginx/html/
-COPY config.js /usr/share/nginx/html/
-COPY main.js /usr/share/nginx/html/
-COPY optimizers.js /usr/share/nginx/html/
-COPY targets.js /usr/share/nginx/html/
-COPY assets/ /usr/share/nginx/html/assets/
+COPY --from=build /app/dist/ /usr/share/nginx/html/
 
 EXPOSE 80
 
