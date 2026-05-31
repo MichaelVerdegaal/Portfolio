@@ -355,17 +355,117 @@ function showStaticFallback() {
   canvas.style.display = 'none';
   document.getElementById('reveal-btn').style.display = 'none';
   document.getElementById('sr-content').style.display = 'none';
+  document.getElementById('controls').style.display = 'none';
   const fallback = document.getElementById('static-fallback');
   fallback.setAttribute('role', 'main');
   fallback.style.display = 'flex';
+}
+
+// ─── Reset ──────────────────────────────────────────────────────────────────
+
+function resetSimulation() {
+  // Cancel any running animation
+  if (animationId) cancelAnimationFrame(animationId);
+  animationId = null;
+
+  // Reset state
+  state = 'idle';
+  optimizer = null;
+  targetPositions = null;
+  logoPositions = null;
+  resolvedPositions = null;
+  homingStep = 0;
+  resolvedTime = 0;
+
+  // Clear logo overlay
+  const container = document.getElementById('logo-overlay');
+  container.innerHTML = '';
+  logoElements = [];
+
+  // Restore button
+  const btn = document.getElementById('reveal-btn');
+  btn.style.opacity = '1';
+  btn.style.pointerEvents = 'auto';
+
+  // Re-init particles and restart drift
+  initParticles();
+  startIdleDrift();
+}
+
+// ─── Controls Panel ─────────────────────────────────────────────────────────
+
+const PARAM_DEFS = {
+  sgd: [
+    { key: 'learningRate', label: 'Learning Rate', step: 0.01 },
+    { key: 'momentum', label: 'Momentum', step: 0.01 },
+  ],
+  adam: [
+    { key: 'learningRate', label: 'Learning Rate', step: 0.5 },
+    { key: 'beta1', label: 'Beta1', step: 0.01 },
+    { key: 'beta2', label: 'Beta2', step: 0.001 },
+    { key: 'epsilon', label: 'Epsilon', step: 0.0000001 },
+  ],
+  pso: [
+    { key: 'inertiaStart', label: 'Inertia Start', step: 0.01 },
+    { key: 'inertiaEnd', label: 'Inertia End', step: 0.01 },
+    { key: 'cognitive', label: 'Cognitive', step: 0.01 },
+    { key: 'social', label: 'Social', step: 0.01 },
+    { key: 'maxSpeed', label: 'Max Speed', step: 1 },
+  ],
+};
+
+function initControls() {
+  const select = document.getElementById('ctrl-optimizer');
+  const paramsDiv = document.getElementById('param-fields');
+  const resetBtn = document.getElementById('ctrl-reset');
+
+  // Set initial selection from config
+  select.value = config.optimizer.type;
+  renderParams(config.optimizer.type);
+
+  select.addEventListener('change', () => {
+    config.optimizer.type = select.value;
+    renderParams(select.value);
+  });
+
+  resetBtn.addEventListener('click', resetSimulation);
+
+  function renderParams(type) {
+    paramsDiv.innerHTML = '';
+    const defs = PARAM_DEFS[type];
+    if (!defs) return;
+
+    for (const def of defs) {
+      const label = document.createElement('label');
+      const span = document.createElement('span');
+      span.textContent = def.label;
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.step = def.step;
+      input.value = config.optimizer[type][def.key];
+      input.addEventListener('input', () => {
+        const val = parseFloat(input.value);
+        if (!isNaN(val)) {
+          config.optimizer[type][def.key] = val;
+        }
+      });
+      label.appendChild(span);
+      label.appendChild(input);
+      paramsDiv.appendChild(label);
+    }
+  }
 }
 
 // ─── Start ──────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
   if (document.fonts) {
-    document.fonts.ready.then(init);
+    document.fonts.ready.then(() => {
+      init();
+      initControls();
+    });
   } else {
     init();
+    initControls();
   }
 });
