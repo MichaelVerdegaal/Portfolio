@@ -29,7 +29,6 @@ export interface OptimizerState {
   beta1: number;
   beta2: number;
   epsilon: number;
-  t: Float64Array;
   // PSO
   inertiaStart: number;
   inertiaEnd: number;
@@ -99,7 +98,6 @@ export function createOptimizer(particles: Point[], targets: Point[], optimizerC
     state.my = new Float64Array(n);
     state.vx = new Float64Array(n);
     state.vy = new Float64Array(n);
-    state.t = new Float64Array(n);
   } else if (type === 'pso') {
     const cfg = optimizerConfig.pso;
     state.inertiaStart = cfg.inertiaStart;
@@ -183,30 +181,28 @@ function stepSGD(s: OptimizerState): void {
 // ─── Adam ───────────────────────────────────────────────────────────────────
 
 function stepAdam(s: OptimizerState): void {
-  const { n, px, py, tx, ty, mx, my, vx, vy, t, lr, beta1, beta2, epsilon, gain } = s;
+  const { n, px, py, tx, ty, mx, my, vx, vy, lr, beta1, beta2, epsilon, gain, step } = s;
   const effLr = lr * gain;
+
+  // Bias corrections computed once per step (all particles share the same count)
+  const bc1 = 1 - Math.pow(beta1, step + 1);
+  const bc2 = 1 - Math.pow(beta2, step + 1);
+
   for (let i = 0; i < n; i++) {
-    t[i]++;
     const gx = px[i] - tx[i];
     const gy = py[i] - ty[i];
 
-    // Update biased first moment
     mx[i] = beta1 * mx[i] + (1 - beta1) * gx;
     my[i] = beta1 * my[i] + (1 - beta1) * gy;
 
-    // Update biased second moment
     vx[i] = beta2 * vx[i] + (1 - beta2) * gx * gx;
     vy[i] = beta2 * vy[i] + (1 - beta2) * gy * gy;
 
-    // Bias correction
-    const bc1 = 1 - Math.pow(beta1, t[i]);
-    const bc2 = 1 - Math.pow(beta2, t[i]);
     const mxHat = mx[i] / bc1;
     const myHat = my[i] / bc1;
     const vxHat = vx[i] / bc2;
     const vyHat = vy[i] / bc2;
 
-    // Step, scaled by the settle gain so the lr-scale jitter dies at the end.
     px[i] -= effLr * mxHat / (Math.sqrt(vxHat) + epsilon);
     py[i] -= effLr * myHat / (Math.sqrt(vyHat) + epsilon);
   }
