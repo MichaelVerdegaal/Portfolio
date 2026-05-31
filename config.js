@@ -4,7 +4,7 @@
  */
 export default {
   // The name to render as the point cloud target
-  name: 'Michael',
+  name: 'Michael Verdegaal',
 
   // Font for rendering the name to sample target points
   font: {
@@ -26,8 +26,8 @@ export default {
 
   // Particle system
   particles: {
-    count: 3000,
-    radius: 1.5,
+    count: 10000,
+    radius: 1.0,
     driftSpeed: 0.3,
   },
 
@@ -48,18 +48,18 @@ export default {
     },
 
     pso: {
-      inertiaStart: 0.9,
-      inertiaEnd: 0.4,
-      cognitive: 0.12,
-      social: 0.03,
-      maxSpeed: 60,
+      inertiaStart: 0.4,
+      inertiaEnd: 0.2,
+      cognitive: 1,
+      social: 1,
+      maxSpeed: 0.1,
     },
   },
 
   // Reveal timing
   reveal: {
-    durationSeconds: 5,
-    stepsPerFrame: 3,
+    durationSeconds: 30,
+    stepsPerFrame: 10,
   },
 
   // Logos and links displayed beneath the name
@@ -67,17 +67,17 @@ export default {
     {
       label: 'GitHub',
       svg: 'assets/logos/github.svg',
-      href: 'https://github.com/michael',
+      href: 'https://github.com/michaelverdegaal',
     },
     {
       label: 'LinkedIn',
       svg: 'assets/logos/linkedin.svg',
-      href: 'https://linkedin.com/in/michael',
+      href: 'https://linkedin.com/in/michaelverdegaal',
     },
     {
       label: 'Email',
       svg: 'assets/logos/email.svg',
-      href: 'mailto:michael@example.com',
+      href: 'mailto:michaelverdegaal@example.com',
     },
   ],
 
