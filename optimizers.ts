@@ -1,8 +1,6 @@
 import type { OptimizerType, Config } from './config';
 import type { Point } from './targets';
 
-export type { Point };
-
 /** Optimizer state — a single interface with optional per-type fields. */
 export interface OptimizerState {
   type: OptimizerType;
@@ -51,6 +49,11 @@ export interface OptimizerState {
   nsX1: Float32Array;
 }
 
+// At a constant step size, none of the optimizers land cleanly on their targets:
+// Adam keeps stepping at roughly its learning rate even as the gradient vanishes,
+// and PSO's per-step random forcing never dies. Tapering the effective step size
+// to zero over the final 5% collapses oscillation amplitude so particles settle
+// exactly on their targets.
 const SETTLE_START = 0.95;
 
 function settleGain(progress: number): number {
@@ -220,7 +223,8 @@ function stepPSO(s: OptimizerState): void {
   const { n, px, py, tx, ty, vx, vy, cognitive, social, maxSpeed, maxSpeedSq,
           inertiaStart, inertiaEnd, progress, gain, centroidX, centroidY } = s;
 
-  // Anneal inertia from start to end over the reveal.
+  // Anneal inertia from high to low over the reveal so particles drift freely
+  // early on (swarm-like exploration) and converge crisply at the end.
   const inertia = inertiaStart + (inertiaEnd - inertiaStart) * progress;
 
   // Apply gain to inertia so velocity memory dies during settle, but keep
@@ -228,6 +232,8 @@ function stepPSO(s: OptimizerState): void {
   // As particles approach their targets the cognitive term (proportional to
   // distance) naturally vanishes, giving a clean stop.
   const effInertia = inertia * gain;
+  // Fade social cohesion to zero over the reveal — otherwise the swarm settles
+  // on a version of the name contracted toward the centroid.
   const socialWeight = social * (1 - progress);
   const cog = cognitive;
   const soc = socialWeight * gain;
@@ -314,6 +320,8 @@ function stepMuon(s: OptimizerState): void {
     nsX1[i] = bufY[i] / norm;
   }
 
+  // Newton-Schulz iteration coefficients — these specific values come from the
+  // Muon optimizer paper and give rapid convergence of the polar decomposition.
   const ca = 3.4445, cb = -4.7750, cc = 2.0315;
 
   for (let step = 0; step < nsSteps; step++) {
@@ -349,12 +357,4 @@ function stepMuon(s: OptimizerState): void {
     px[i] -= effLr * nsX0[i];
     py[i] -= effLr * nsX1[i];
   }
-}
-
-/**
- * Copy optimiser positions back into particle objects for rendering.
- */
-export function readPositions(state: OptimizerState, outX: Float32Array, outY: Float32Array): void {
-  outX.set(state.px);
-  outY.set(state.py);
 }

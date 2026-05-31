@@ -106,7 +106,7 @@ function refToScreen(rx: number, ry: number): { x: number; y: number } {
 
 // ─── Initialisation ─────────────────────────────────────────────────────────
 
-export function init(): void {
+function init(): void {
   canvas = document.getElementById('point-canvas') as HTMLCanvasElement;
 
   renderer = createRenderer({
@@ -193,7 +193,9 @@ function startIdleDrift(): void {
   animationId = requestAnimationFrame(driftFrame);
 }
 
-// Fast xorshift128 PRNG — avoids overhead of Math.random() in hot loops
+// xorshift128 PRNG — Math.random() has measurable overhead when called
+// hundreds of thousands of times per frame in the drift loop. This
+// deterministic PRNG is ~3× faster and good enough for jitter.
 let _s0 = 123456789 | 0;
 let _s1 = 362436069 | 0;
 let _s2 = 521288629 | 0;
@@ -202,8 +204,7 @@ function fastRandom(): number {
   const t = _s3 ^ (_s3 << 11);
   _s3 = _s2; _s2 = _s1; _s1 = _s0;
   _s0 = (_s0 ^ (_s0 >>> 19)) ^ (t ^ (t >>> 8));
-  // Map to [0, 1) — use unsigned shift to get positive value
-  return (_s0 >>> 0) / 4294967296;
+  return (_s0 >>> 0) / 4294967296; // unsigned shift → [0, 1)
 }
 
 function updateDrift(): void {
@@ -312,7 +313,9 @@ async function startReveal(): Promise<void> {
     particleCount = targetN;
   }
 
-  // Sort particles by x for sorted-axis assignment (reduces crossing paths)
+  // Sort both particles and targets along x so pairing them by rank produces a
+  // coherent fold-into-shape motion instead of a scramble of crossing paths.
+  // This assignment strategy is cheap and visually load-bearing.
   const sortIdx = new Int32Array(particleCount);
   for (let i = 0; i < particleCount; i++) sortIdx[i] = i;
   sortIdx.sort((a, b) => particleX[a] - particleX[b] || particleY[a] - particleY[b]);
@@ -334,7 +337,10 @@ async function startReveal(): Promise<void> {
   const optType = config.optimizer.type;
 
   if (renderer.supportsGPU(optType)) {
-    // GPU Transform Feedback path — zero per-frame CPU→GPU upload
+    // GPU Transform Feedback path: particle state stays on GPU, zero per-frame
+    // CPU→GPU position upload. Muon is excluded because its Newton-Schulz
+    // orthogonalization requires global dot-product reductions across all
+    // particles, which can't run in a single Transform Feedback pass.
     const txArray = new Float32Array(particleCount);
     const tyArray = new Float32Array(particleCount);
     for (let i = 0; i < particleCount; i++) {
@@ -475,7 +481,8 @@ function fadeInLogos(): void {
 function renderLoop(): void {
   if (state !== 'resolved') return;
 
-  // Subtle micro-drift around settled positions
+  // Subtle micro-drift around settled positions keeps the resolved text from
+  // looking frozen. Uses a cheap triangle wave (no trig) per particle.
   resolvedTime += 0.01;
   if (resolvedX && resolvedY) {
     const amp = 0.3;

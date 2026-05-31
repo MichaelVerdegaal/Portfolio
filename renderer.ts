@@ -227,8 +227,9 @@ const OPTIMIZER_UNIFORMS: Record<string, string[]> = {
 const COMMON_UPDATE_UNIFORMS = ['u_targets', 'u_texWidth', 'u_gain'];
 const TF_VARYINGS = ['v_pos', 'v_vel', 'v_mom', 'v_extra'];
 
-// ─── Settle Gain (replicated from optimizers.ts) ────────────────────────────
-
+// Must match the CPU-side settleGain() in optimizers.ts — duplicated here
+// because the GPU step loop needs the same taper schedule to set u_gain,
+// and importing from optimizers.ts would create a circular concern.
 const SETTLE_START = 0.95;
 
 function settleGain(progress: number): number {
@@ -320,8 +321,14 @@ interface GPUState {
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const FLOATS_PER_PARTICLE = 8; // pos.xy + vel.xy + mom.xy + extra.xy
+// Interleaved per-particle layout: [pos.xy, vel.xy, mom.xy, extra.xy] = 8 floats.
+// All optimizer state lives in one buffer so a single TF pass reads and writes
+// the complete particle state, avoiding multi-buffer binding complexity.
+const FLOATS_PER_PARTICLE = 8;
 const STRIDE = FLOATS_PER_PARTICLE * 4; // 32 bytes
+// Fixed texture width for the target-position texture. The height is derived
+// from particle count. 1024 is a safe power-of-two that keeps texelFetch
+// arithmetic simple (gl_VertexID % 1024 and / 1024).
 const TARGET_TEX_WIDTH = 1024;
 
 // ─── createRenderer ─────────────────────────────────────────────────────────
@@ -422,6 +429,9 @@ export function createRenderer(opts: RendererOptions): Renderer {
   gl.uniform1f(gl.getUniformLocation(tfRenderProg, 'u_pointSize')!, pointSize);
 
   // ── Interleaved ping-pong buffers ─────────────────────────────────────
+  // Two buffers alternate as read/write targets each step: buffer A is read
+  // via a VAO while Transform Feedback writes into buffer B, then they swap.
+  // This avoids any CPU-side readback or re-upload between optimizer steps.
   const bufferByteSize = maxParticles * STRIDE;
 
   const particleBufs: [WebGLBuffer, WebGLBuffer] = [gl.createBuffer()!, gl.createBuffer()!];
@@ -473,7 +483,10 @@ export function createRenderer(opts: RendererOptions): Renderer {
     gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
   }
 
-  // ── Target texture ────────────────────────────────────────────────────
+  // ── Target texture (RG32F) ────────────────────────────────────────────
+  // Stored as a texture rather than a buffer so that the update shader can
+  // sample each particle's target via texelFetch without needing a second
+  // set of interleaved attributes.
   let targetTex: WebGLTexture | null = null;
 
   // ── GPU state ─────────────────────────────────────────────────────────
@@ -656,7 +669,8 @@ export function createRenderer(opts: RendererOptions): Renderer {
     // Unbind ARRAY_BUFFER to avoid TF dual-binding conflict
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
-    // Enable rasterizer discard for all update steps
+    // RASTERIZER_DISCARD: the update pass only writes to the TF buffer;
+    // no fragments are needed, so we skip rasterization entirely.
     gl.enable(gl.RASTERIZER_DISCARD);
 
     for (let s = 0; s < stepsPerFrame; s++) {
@@ -665,8 +679,10 @@ export function createRenderer(opts: RendererOptions): Renderer {
         : 0;
       const gain = settleGain(progress);
 
-      // Adam: advance bias correction BEFORE setting uniforms
-      // (bc1Acc starts at 1; multiplying first avoids division by zero)
+      // Adam: advance bias correction accumulators BEFORE setting uniforms.
+      // bc1Acc starts at 1; if we set u_bc1 = 1 - bc1Acc before multiplying,
+      // the first step would have u_bc1 = 0, causing a division-by-zero in
+      // the shader's mHat = m / u_bc1.
       if (gpu.type === 'adam') {
         gpu.bc1Acc *= gpu.params.beta1;
         gpu.bc2Acc *= gpu.params.beta2;
