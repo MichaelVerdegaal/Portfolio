@@ -15,11 +15,11 @@ export default {
 
   // Colour palette
   palette: {
-    background: '#000000',
+    background: '#191A1C',
     points: '#ffffff',
     pointsAlpha: 0.85,
     button: '#ffffff',
-    buttonText: '#000000',
+    buttonText: '#191A1C',
     buttonHover: '#cccccc',
     logoAccent: '#ffffff',
   },
