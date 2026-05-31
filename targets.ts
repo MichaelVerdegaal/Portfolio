@@ -17,6 +17,15 @@ export interface TargetResult {
   logoPositions: LogoPosition[];
 }
 
+/** Generate n random points within a bounding box. */
+function randomPoints(n: number, x: number, y: number, w: number, h: number): Point[] {
+  const pts: Point[] = [];
+  for (let i = 0; i < n; i++) {
+    pts.push({ x: x + Math.random() * w, y: y + Math.random() * h });
+  }
+  return pts;
+}
+
 /**
  * Sample target points from text rendered on an offscreen canvas.
  * All coordinates are in reference space (config.canvas.referenceWidth/Height).
@@ -42,7 +51,7 @@ export function sampleTextTargets(
   const nameHeight = sampleHeight * layout.nameScale;
   let fontSize = nameHeight * 0.8;
   ctx.font = `${font.weight} ${fontSize}px "${font.family}"`;
-  let metrics = ctx.measureText(name);
+  const metrics = ctx.measureText(name);
   const maxWidth = sampleWidth * 0.85;
   if (metrics.width > maxWidth) {
     fontSize *= maxWidth / metrics.width;
@@ -70,14 +79,7 @@ export function sampleTextTargets(
   }
 
   if (inkPixels.length === 0) {
-    const points = [];
-    for (let i = 0; i < numPoints; i++) {
-      points.push({
-        x: refWidth * 0.2 + Math.random() * refWidth * 0.6,
-        y: refHeight * 0.3 + Math.random() * refHeight * 0.3,
-      });
-    }
-    return points;
+    return randomPoints(numPoints, refWidth * 0.2, refHeight * 0.3, refWidth * 0.6, refHeight * 0.3);
   }
 
   const points = [];
@@ -137,14 +139,7 @@ export function sampleLogoTargets(
       }
 
       if (inkPixels.length === 0) {
-        const points = [];
-        for (let i = 0; i < numPoints; i++) {
-          points.push({
-            x: x + Math.random() * width,
-            y: y + Math.random() * height,
-          });
-        }
-        resolve(points);
+        resolve(randomPoints(numPoints, x, y, width, height));
         return;
       }
 
@@ -157,14 +152,7 @@ export function sampleLogoTargets(
     };
 
     img.onerror = () => {
-      const points = [];
-      for (let i = 0; i < numPoints; i++) {
-        points.push({
-          x: x + Math.random() * width,
-          y: y + Math.random() * height,
-        });
-      }
-      resolve(points);
+      resolve(randomPoints(numPoints, x, y, width, height));
     };
 
     img.src = svgPath;

@@ -1,9 +1,7 @@
 import type { OptimizerType, Config } from './config';
+import type { Point } from './targets';
 
-export interface Point {
-  x: number;
-  y: number;
-}
+export type { Point };
 
 /** Optimizer state — a single interface with optional per-type fields. */
 export interface OptimizerState {
