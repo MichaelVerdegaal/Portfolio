@@ -1,0 +1,15 @@
+services:
+  portfolio:
+    build: .
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+    # ─── Optional: bind-mount config and assets for live editing ──────────────
+    # Uncomment the volumes below to edit config.js or swap logo SVGs on the
+    # host without rebuilding the image. Changes take effect on browser refresh.
+    #
+    # volumes:
+    #   - ./config.js:/usr/share/nginx/html/config.js:ro
+    #   - ./assets/logos:/usr/share/nginx/html/assets/logos:ro
+    #   - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
