@@ -26,8 +26,8 @@ export default {
 
   // Particle system
   particles: {
-    count: 10000,
-    radius: 1.0,
+    count: 20000,
+    radius: 0.5,
     driftSpeed: 0.3,
   },
 
@@ -36,12 +36,12 @@ export default {
     type: 'pso', // 'pso' | 'adam' | 'sgd'
 
     sgd: {
-      learningRate: 0.15,
-      momentum: 0.85,
+      learningRate: 0.0001,
+      momentum: 0.5,
     },
 
     adam: {
-      learningRate: 5,
+      learningRate: 0.05,
       beta1: 0.9,
       beta2: 0.999,
       epsilon: 1e-8,
@@ -50,9 +50,9 @@ export default {
     pso: {
       inertiaStart: 0.4,
       inertiaEnd: 0.2,
-      cognitive: 1,
-      social: 1,
-      maxSpeed: 0.1,
+      cognitive: 0.5,
+      social: 0.5,
+      maxSpeed: 0.05,
     },
   },
 
@@ -67,17 +67,17 @@ export default {
     {
       label: 'GitHub',
       svg: 'assets/logos/github.svg',
-      href: 'https://github.com/michaelverdegaal',
+      href: 'https://github.com/MichaelVerdegaal',
     },
     {
       label: 'LinkedIn',
       svg: 'assets/logos/linkedin.svg',
-      href: 'https://linkedin.com/in/michaelverdegaal',
+      href: 'https://www.linkedin.com/in/michael-verdegaal-2b8353164/',
     },
     {
       label: 'Email',
       svg: 'assets/logos/email.svg',
-      href: 'mailto:michaelverdegaal@example.com',
+      href: 'mailto:mverdegaal@protonmail.com',
     },
   ],
 
