@@ -106,6 +106,29 @@ export function createOptimizer(particles, targets, optimizerConfig) {
     }
     state.centroidX = cx / n;
     state.centroidY = cy / n;
+  } else if (type === 'rmsprop') {
+    const cfg = optimizerConfig.rmsprop;
+    state.lr = cfg.learningRate;
+    state.alpha = cfg.alpha;
+    state.epsilon = cfg.epsilon;
+    state.mom = cfg.momentum;
+    // Running average of squared gradient
+    state.vx = new Float64Array(n);
+    state.vy = new Float64Array(n);
+    // Momentum buffer (used only when momentum > 0)
+    state.bx = new Float64Array(n);
+    state.by = new Float64Array(n);
+  } else if (type === 'muon') {
+    const cfg = optimizerConfig.muon;
+    state.lr = cfg.learningRate;
+    state.momentum = cfg.momentum;
+    state.nsSteps = cfg.nsSteps;
+    // Momentum buffer
+    state.bufX = new Float64Array(n);
+    state.bufY = new Float64Array(n);
+    // Pre-allocated scratch arrays for Newton-Schulz iteration
+    state.nsX0 = new Float64Array(n);
+    state.nsX1 = new Float64Array(n);
   }
 
   return state;
@@ -130,6 +153,8 @@ export function optimizerStep(state) {
     case 'sgd': stepSGD(state); break;
     case 'adam': stepAdam(state); break;
     case 'pso': stepPSO(state); break;
+    case 'rmsprop': stepRMSProp(state); break;
+    case 'muon': stepMuon(state); break;
   }
   state.step++;
 }
@@ -190,21 +215,23 @@ function stepPSO(s) {
   // Anneal inertia from start to end over the reveal.
   const inertia = inertiaStart + (inertiaEnd - inertiaStart) * progress;
 
-  // Social fully fades to zero, so the swarm settles on the true targets rather
-  // than on a version contracted toward the centroid. The settle gain then
-  // tapers both forces to zero so inertia damps the residual velocity to a stop.
+  // Apply gain to inertia so velocity memory dies during settle, but keep
+  // cognitive force alive so particles keep being pulled toward their targets.
+  // As particles approach their targets the cognitive term (proportional to
+  // distance) naturally vanishes, giving a clean stop.
+  const effInertia = inertia * gain;
   const socialWeight = social * (1 - progress);
-  const cog = cognitive * gain;
+  const cog = cognitive;
   const soc = socialWeight * gain;
 
   for (let i = 0; i < n; i++) {
     const r1 = Math.random();
     const r2 = Math.random();
 
-    vx[i] = inertia * vx[i]
+    vx[i] = effInertia * vx[i]
            + cog * r1 * (tx[i] - px[i])
            + soc * r2 * (centroidX - px[i]);
-    vy[i] = inertia * vy[i]
+    vy[i] = effInertia * vy[i]
            + cog * r1 * (ty[i] - py[i])
            + soc * r2 * (centroidY - py[i]);
 
@@ -218,6 +245,98 @@ function stepPSO(s) {
 
     px[i] += vx[i];
     py[i] += vy[i];
+  }
+}
+
+// ─── RMSProp ────────────────────────────────────────────────────────────────
+
+function stepRMSProp(s) {
+  const { n, px, py, tx, ty, vx, vy, bx, by, lr, alpha, epsilon, mom, gain } = s;
+  const effLr = lr * gain;
+
+  for (let i = 0; i < n; i++) {
+    const gx = px[i] - tx[i];
+    const gy = py[i] - ty[i];
+
+    // Running average of squared gradient
+    vx[i] = alpha * vx[i] + (1 - alpha) * gx * gx;
+    vy[i] = alpha * vy[i] + (1 - alpha) * gy * gy;
+
+    if (mom > 0) {
+      // Momentum variant
+      bx[i] = mom * bx[i] + gx / (Math.sqrt(vx[i]) + epsilon);
+      by[i] = mom * by[i] + gy / (Math.sqrt(vy[i]) + epsilon);
+      px[i] -= effLr * bx[i];
+      py[i] -= effLr * by[i];
+    } else {
+      px[i] -= effLr * gx / (Math.sqrt(vx[i]) + epsilon);
+      py[i] -= effLr * gy / (Math.sqrt(vy[i]) + epsilon);
+    }
+  }
+}
+
+// ─── Muon (Momentum + Newton-Schulz Orthogonalisation) ─────────────────────
+
+function stepMuon(s) {
+  const { n, px, py, tx, ty, bufX, bufY, lr, momentum, nsSteps, gain,
+          nsX0, nsX1 } = s;
+  const effLr = lr * gain;
+
+  // 1. Gradient + momentum accumulation
+  for (let i = 0; i < n; i++) {
+    const gx = px[i] - tx[i];
+    const gy = py[i] - ty[i];
+    bufX[i] = momentum * bufX[i] + gx;
+    bufY[i] = momentum * bufY[i] + gy;
+  }
+
+  // 2. Newton-Schulz orthogonalisation of the N×2 momentum matrix.
+  //    Since N >> 2 we work with the transpose (2×N rows in nsX0, nsX1).
+  let normSq = 0;
+  for (let i = 0; i < n; i++) {
+    normSq += bufX[i] * bufX[i] + bufY[i] * bufY[i];
+  }
+  const norm = Math.sqrt(normSq) + 1e-7;
+
+  for (let i = 0; i < n; i++) {
+    nsX0[i] = bufX[i] / norm;
+    nsX1[i] = bufY[i] / norm;
+  }
+
+  const ca = 3.4445, cb = -4.7750, cc = 2.0315;
+
+  for (let step = 0; step < nsSteps; step++) {
+    // A = X @ Xᵀ  (2×2, symmetric)
+    let a00 = 0, a01 = 0, a11 = 0;
+    for (let i = 0; i < n; i++) {
+      a00 += nsX0[i] * nsX0[i];
+      a01 += nsX0[i] * nsX1[i];
+      a11 += nsX1[i] * nsX1[i];
+    }
+
+    // B = cb·A + cc·A² (2×2)
+    const aa00 = a00 * a00 + a01 * a01;
+    const aa01 = a00 * a01 + a01 * a11;
+    const aa11 = a01 * a01 + a11 * a11;
+
+    const b00 = cb * a00 + cc * aa00;
+    const b01 = cb * a01 + cc * aa01;
+    const b10 = b01; // symmetric
+    const b11 = cb * a11 + cc * aa11;
+
+    // X ← ca·X + B·X  (2×N)
+    for (let i = 0; i < n; i++) {
+      const tmp0 = ca * nsX0[i] + b00 * nsX0[i] + b01 * nsX1[i];
+      const tmp1 = ca * nsX1[i] + b10 * nsX0[i] + b11 * nsX1[i];
+      nsX0[i] = tmp0;
+      nsX1[i] = tmp1;
+    }
+  }
+
+  // 3. Apply the orthogonalised update
+  for (let i = 0; i < n; i++) {
+    px[i] -= effLr * nsX0[i];
+    py[i] -= effLr * nsX1[i];
   }
 }
 

@@ -33,7 +33,7 @@ export default {
 
   // Optimiser selection and parameters
   optimizer: {
-    type: 'pso', // 'pso' | 'adam' | 'sgd'
+    type: 'pso', // 'pso' | 'adam' | 'sgd' | 'rmsprop' | 'muon'
 
     sgd: {
       learningRate: 0.0001,
@@ -53,6 +53,19 @@ export default {
       cognitive: 0.5,
       social: 0.5,
       maxSpeed: 0.05,
+    },
+
+    rmsprop: {
+      learningRate: 0.1,
+      alpha: 0.99,
+      epsilon: 1e-8,
+      momentum: 0,
+    },
+
+    muon: {
+      learningRate: 30,
+      momentum: 0.85,
+      nsSteps: 5,
     },
   },
 

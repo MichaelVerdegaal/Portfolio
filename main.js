@@ -159,6 +159,43 @@ function renderParticles() {
   ctx.globalAlpha = 1;
 }
 
+// ─── Loss Display ───────────────────────────────────────────────────────────
+
+function computeLoss() {
+  if (!targetPositions) return 0;
+  let total = 0;
+  const n = particles.length;
+  for (let i = 0; i < n; i++) {
+    const dx = particles[i].x - targetPositions[i].x;
+    const dy = particles[i].y - targetPositions[i].y;
+    total += dx * dx + dy * dy;
+  }
+  return total / n;
+}
+
+function formatLoss(v) {
+  if (v >= 10000) return v.toExponential(2);
+  if (v >= 100) return v.toFixed(1);
+  if (v >= 1) return v.toFixed(3);
+  return v.toFixed(5);
+}
+
+function updateLossDisplay(loss) {
+  const el = document.getElementById('loss-counter');
+  if (!el) return;
+  const name = config.optimizer.type.toUpperCase();
+  el.textContent = `${name} · Loss: ${formatLoss(loss)}`;
+  el.style.opacity = '1';
+}
+
+function hideLossDisplay() {
+  const el = document.getElementById('loss-counter');
+  if (el) {
+    el.textContent = '';
+    el.style.opacity = '0';
+  }
+}
+
 // ─── Homing / Reveal ────────────────────────────────────────────────────────
 
 async function startReveal() {
@@ -218,40 +255,28 @@ function homingFrame() {
   readPositions(optimizer, particles);
   renderParticles();
 
+  // Update loss display
+  const loss = computeLoss();
+  updateLossDisplay(loss);
+
   // Check convergence
-  if (checkConvergence()) return;
-
-  animationId = requestAnimationFrame(homingFrame);
-}
-
-function checkConvergence() {
-  // Compute mean squared distance to targets
-  let totalDist = 0;
-  const n = particles.length;
-  for (let i = 0; i < n; i++) {
-    const dx = particles[i].x - targetPositions[i].x;
-    const dy = particles[i].y - targetPositions[i].y;
-    totalDist += dx * dx + dy * dy;
-  }
-  const msd = totalDist / n;
-
-  // Converge when average distance is < 1 pixel RMS
-  if (msd < 1.0) {
+  if (loss < 1.0) {
     resolveHoming();
-    return true;
+    return;
   }
 
   // Safety: resolve after exceeding step budget
   if (homingStep > totalHomingSteps * 2) {
     resolveHoming();
-    return true;
+    return;
   }
 
-  return false;
+  animationId = requestAnimationFrame(homingFrame);
 }
 
 function resolveHoming() {
   state = 'resolved';
+  hideLossDisplay();
   // Snap to targets for crispness
   for (let i = 0; i < particles.length; i++) {
     particles[i].x = targetPositions[i].x;
@@ -363,6 +388,7 @@ function resetSimulation() {
   resolvedPositions = null;
   homingStep = 0;
   resolvedTime = 0;
+  hideLossDisplay();
 
   // Clear logo overlay
   const container = document.getElementById('logo-overlay');
@@ -398,6 +424,17 @@ const PARAM_DEFS = {
     { key: 'cognitive', label: 'Cognitive', step: 0.01 },
     { key: 'social', label: 'Social', step: 0.01 },
     { key: 'maxSpeed', label: 'Max Speed', step: 1 },
+  ],
+  rmsprop: [
+    { key: 'learningRate', label: 'Learning Rate', step: 0.01 },
+    { key: 'alpha', label: 'Alpha', step: 0.01 },
+    { key: 'epsilon', label: 'Epsilon', step: 0.0000001 },
+    { key: 'momentum', label: 'Momentum', step: 0.01 },
+  ],
+  muon: [
+    { key: 'learningRate', label: 'Learning Rate', step: 1 },
+    { key: 'momentum', label: 'Momentum', step: 0.01 },
+    { key: 'nsSteps', label: 'NS Steps', step: 1 },
   ],
 };
 

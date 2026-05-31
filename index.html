@@ -235,10 +235,29 @@
     #param-fields {
       margin-top: 6px;
     }
+
+    /* ─── Loss Counter ───────────────────────────────────────────── */
+    #loss-counter {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      z-index: 50;
+      color: rgba(255, 255, 255, 0.6);
+      font-family: 'Inter', monospace;
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.02em;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
   </style>
 </head>
 <body>
   <canvas id="point-canvas" aria-hidden="true"></canvas>
+
+  <!-- Loss counter -->
+  <div id="loss-counter" aria-hidden="true"></div>
 
   <!-- Controls panel -->
   <details id="controls" open>
@@ -249,6 +268,8 @@
         <option value="pso">PSO</option>
         <option value="adam">Adam</option>
         <option value="sgd">SGD</option>
+        <option value="rmsprop">RMSProp</option>
+        <option value="muon">Muon</option>
       </select>
     </label>
     <div id="param-fields"></div>
@@ -275,15 +296,15 @@
   <div id="static-fallback" aria-label="Portfolio">
     <h1>Michael</h1>
     <div class="static-links">
-      <a href="https://github.com/michael" target="_blank" rel="noopener noreferrer">
+      <a href="https://github.com/MichaelVerdegaal" target="_blank" rel="noopener noreferrer">
         <img src="assets/logos/github.svg" alt="">
         GitHub
       </a>
-      <a href="https://linkedin.com/in/michael" target="_blank" rel="noopener noreferrer">
+      <a href="https://www.linkedin.com/in/michael-verdegaal-2b8353164/" target="_blank" rel="noopener noreferrer">
         <img src="assets/logos/linkedin.svg" alt="">
         LinkedIn
       </a>
-      <a href="mailto:michael@example.com">
+      <a href="mailto:mverdegaal@protonmail.com">
         <img src="assets/logos/email.svg" alt="">
         Email
       </a>
