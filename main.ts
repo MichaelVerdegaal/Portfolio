@@ -75,12 +75,28 @@ let cachedScale = 1;
 let cachedOffsetX = 0;
 let cachedOffsetY = 0;
 
+// Visible area in reference-space coordinates — extends beyond [0, REF_W] × [0, REF_H]
+// on non-16:9 viewports so idle particles fill the entire screen, not just the
+// letterboxed center.
+let visibleLeft = 0;
+let visibleRight = REF_W;
+let visibleTop = 0;
+let visibleBottom = REF_H;
+
 function updateCachedTransform(): void {
   const scaleX = canvas.width / REF_W;
   const scaleY = canvas.height / REF_H;
   cachedScale = Math.min(scaleX, scaleY);
   cachedOffsetX = (canvas.width - REF_W * cachedScale) / 2;
   cachedOffsetY = (canvas.height - REF_H * cachedScale) / 2;
+
+  // Invert the ref→screen mapping to find what ref-space rectangle the full
+  // viewport covers. On a 16:9 monitor this equals [0,REF_W]×[0,REF_H];
+  // on an ultrawide the horizontal range is wider, etc.
+  visibleLeft = -cachedOffsetX / cachedScale;
+  visibleRight = (canvas.width - cachedOffsetX) / cachedScale;
+  visibleTop = -cachedOffsetY / cachedScale;
+  visibleBottom = (canvas.height - cachedOffsetY) / cachedScale;
 }
 
 /** Map a reference-space point to screen pixels. */
@@ -146,9 +162,11 @@ function initParticles(): void {
   particleVX = new Float32Array(count);
   particleVY = new Float32Array(count);
   const speed = config.particles.driftSpeed;
+  const vw = visibleRight - visibleLeft;
+  const vh = visibleBottom - visibleTop;
   for (let i = 0; i < count; i++) {
-    particleX[i] = Math.random() * REF_W;
-    particleY[i] = Math.random() * REF_H;
+    particleX[i] = visibleLeft + Math.random() * vw;
+    particleY[i] = visibleTop + Math.random() * vh;
     particleVX[i] = (Math.random() - 0.5) * speed;
     particleVY[i] = (Math.random() - 0.5) * speed;
   }
@@ -192,14 +210,19 @@ function updateDrift(): void {
   const margin = 50;
   const jitter = 0.02 * config.particles.driftSpeed;
   const n = particleCount;
+  const left = visibleLeft - margin;
+  const right = visibleRight + margin;
+  const top = visibleTop - margin;
+  const bottom = visibleBottom + margin;
   for (let i = 0; i < n; i++) {
     particleX[i] += particleVX[i];
     particleY[i] += particleVY[i];
 
-    if (particleX[i] < -margin) particleX[i] = REF_W + margin;
-    if (particleX[i] > REF_W + margin) particleX[i] = -margin;
-    if (particleY[i] < -margin) particleY[i] = REF_H + margin;
-    if (particleY[i] > REF_H + margin) particleY[i] = -margin;
+    // Wrap around the full visible area so particles cover the entire screen
+    if (particleX[i] < left) particleX[i] = right;
+    if (particleX[i] > right) particleX[i] = left;
+    if (particleY[i] < top) particleY[i] = bottom;
+    if (particleY[i] > bottom) particleY[i] = top;
 
     particleVX[i] += (fastRandom() - 0.5) * jitter;
     particleVY[i] += (fastRandom() - 0.5) * jitter;
@@ -279,8 +302,8 @@ async function startReveal(): Promise<void> {
     newX.set(particleX.subarray(0, Math.min(particleCount, targetN)));
     newY.set(particleY.subarray(0, Math.min(particleCount, targetN)));
     for (let i = particleCount; i < targetN; i++) {
-      newX[i] = Math.random() * REF_W;
-      newY[i] = Math.random() * REF_H;
+      newX[i] = visibleLeft + Math.random() * (visibleRight - visibleLeft);
+      newY[i] = visibleTop + Math.random() * (visibleBottom - visibleTop);
     }
     particleX = newX;
     particleY = newY;
