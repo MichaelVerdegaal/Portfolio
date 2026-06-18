@@ -1,6 +1,12 @@
-def main():
-    print("Hello from portfolio!")
+from fastapi import FastAPI
+import yaml
+
+with open('skills.yaml', 'r') as file:
+        loaded_data = yaml.safe_load(file)
+app = FastAPI()
 
 
-if __name__ == "__main__":
-    main()
+@app.get("/")
+async def root():
+    # Reading the data from a YAML file
+    return dict(loaded_data)
