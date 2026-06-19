@@ -1,0 +1,37 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Michael Verdegaal — Portfolio</title>
+  <meta name="description" content="Michael Verdegaal - ML Engineer, AI Engineer, Software Developer and more!">
+  <link rel="stylesheet" href="https://pyscript.net/releases/2026.6.1/core.css" />
+  <script type="module" src="https://pyscript.net/releases/2026.6.1/core.js"></script>
+</head>
+<body>
+  <h1>Welcome to My Portfolio</h1>
+
+<p>This is a showcase of my skills and projects. Below is a list of my skills:</p>
+
+    <script type="py" terminal>
+        print("Hello, world!")
+    </script>
+</body>
+
+<script type="module">
+  document.addEventListener('py:ready', (event) => {
+      console.log('Python interpreter ready');
+      console.log('Script:', event.detail.script);
+  });
+
+  document.addEventListener('py:done', (event) => {
+      console.log('All scripts finished');
+  });
+
+  document.addEventListener('mpy:ready', (event) => {
+      console.log('MicroPython interpreter ready');
+  });
+</script>
+
+</html>
