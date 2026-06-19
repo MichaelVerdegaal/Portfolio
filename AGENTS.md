@@ -1,34 +1,6 @@
-# Arciv
 
-## Project Description
+# Project Description
 My personal portfolio website.
-
-## Context
-
-This is a solo project; no other developers read or maintain this code. That means:
-
-- No one will explain what "clever" code does when you've forgotten. Write for the version of
-  yourself 6 months from now.
-- No PR reviews catch mistakes. Lean on type hints, explicit naming, and logging to compensate.
-- Refactoring is cheap (no coordination cost), but debugging is expensive (no one to ask).
-
-## Coding Principles
-
-**Maintainability over elegance.** If it takes more than 10 seconds to understand what a line does,
-rewrite it. "Clever" is not a compliment.
-
-**Abstractions must earn their keep.** Every new class, pattern, or indirection must justify its
-existence with a concrete benefit. "It's more elegant" is not justification.
-
-**Debuggability is a feature.** When something breaks, can you figure out why from the error message
-and a stack trace? Can you inspect intermediate state? If not, add logging or simplify the control
-flow.
-
-**Prevent, don't post-process.** Fix data quality problems at the source (e.g. configure trafilatura
-to exclude code blocks) rather than writing complex cleanup logic downstream.
-
-**Boring and correct beats clever and fragile.** The best solution is the one that obviously works,
-not the one that impressively almost works.
 
 ## Code Standards
 

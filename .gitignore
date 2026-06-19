@@ -19,3 +19,6 @@ AGENTS.md
 compose.yaml
 .env.example
 .python-version
+
+# Ignore pyscript stubs
+pyscript-stubs/**
