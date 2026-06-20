@@ -3,8 +3,8 @@ import yaml
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-with open('skills.yaml', 'r') as file:
-        loaded_data = yaml.safe_load(file)
+with open("skills.yaml", "r") as file:
+    loaded_data = yaml.safe_load(file)
 app = FastAPI()
 
 # Mount Python files
