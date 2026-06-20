@@ -1,16 +1,54 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Michael Verdegaal - Portfolio</title>
-  <meta name="description" content="Michael Verdegaal - ML/AI Engineer, Software Dev and more!">
-  <link rel="stylesheet" href="https://pyscript.net/releases/2026.6.1/core.css" />
-  <script type="module" src="https://pyscript.net/releases/2026.6.1/core.js"></script>
-</head>
-<body>
-  <h1>Welcome to My Portfolio</h1>
-    <button id="clickMe">Click Me</button>
-    <script type="py" src="src/canvas.py"></script>
-</body>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Michael Verdegaal - Portfolio</title>
+		<meta
+			name="description"
+			content="Michael Verdegaal - ML/AI Engineer, Software Dev and more!"
+		/>
+		<link
+			rel="stylesheet"
+			href="https://pyscript.net/releases/2026.6.1/core.css"
+		/>
+		<script
+			type="module"
+			src="https://pyscript.net/releases/2026.6.1/core.js"
+		></script>
+	</head>
+	<body>
+		<h1>Welcome to My Portfolio</h1>
+		<button id="clickMe">Click Me</button>
+		<!-- <script type="py" src="src/canvas.py"> -->
+		<script type="py" , config="static/pyscript.json">
+			import matplotlib.pyplot as plt
+			from pyscript import display
+
+			x = [1, 2, 3, 4, 5]
+			y = [2, 3, 5, 7, 11]
+
+			# plot
+			fig, ax = plt.subplots()
+			ax.scatter(x, y)
+			# Displays plot as image.
+			display(fig)
+			plt.close(fig)
+		</script>
+
+		<script type="module">
+			document.addEventListener("py:ready", (event) => {
+				console.log("Python interpreter ready");
+				console.log("Script:", event.detail.script);
+			});
+
+			document.addEventListener("py:done", (event) => {
+				console.log("All scripts finished");
+			});
+
+			document.addEventListener("mpy:ready", (event) => {
+				console.log("MicroPython interpreter ready");
+			});
+		</script>
+	</body>
 </html>
