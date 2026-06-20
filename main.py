@@ -5,8 +5,9 @@ from fastapi.staticfiles import StaticFiles
 
 with open("skills.yaml", "r") as file:
     loaded_data = yaml.safe_load(file)
-app = FastAPI()
 
+# FastAPI app
+app = FastAPI(openapi_url=None)
 # Mount Python files
 app.mount("/src", StaticFiles(directory="src"), name="src")
 # Mount static files (pyscript.json)
