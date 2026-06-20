@@ -19,3 +19,5 @@ def handler():
     # Displays plot as image.
     display(fig)
     plt.close(fig)
+
+
