@@ -8,5 +8,3 @@ def load_graph_data() -> tuple[list, list]:
     edges = [e for e in tree["edges"]]
     
     return nodes, edges
-
-load_graph_data()
