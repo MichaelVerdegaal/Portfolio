@@ -2,10 +2,12 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import random
 from src.graph import load_graph_data
+from matplotlib.patches import ConnectionPatch
+
+
 
 # Pyplot settings
 plt.rcParams['figure.figsize'] = [15, 7.5]
-
 
 # Constants
 NODES, EDGES = load_graph_data()
@@ -28,14 +30,15 @@ def create_plot():
         node_dict[node] = (coord_x, coord_y)
 
     # Draw nodes
-    ax.scatter(nodes_x, nodes_y)
+    # matplotlib.collections.PathCollection
+    nodePaths = ax.scatter(nodes_x, nodes_y)
 
     # Draw edges
     for edge in EDGES:
         node1, node2 = edge
         x1, y1 = node_dict[node1]
         x2, y2 = node_dict[node2]
-        ax.add_line(Line2D([x1, x2], [y1, y2], linewidth=0.5, color='black'))
-
+        ax.add_patch(ConnectionPatch(xyA=(x1, y1),xyB=(x2, y2), coordsA=ax.transData))
+        # ax.add_line(Line2D([x1, x2], [y1, y2], linewidth=0.5, color='black'))
 
     return fig, ax
