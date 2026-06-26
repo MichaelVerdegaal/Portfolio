@@ -38,7 +38,7 @@ def create_plot():
         node1, node2 = edge
         x1, y1 = node_dict[node1]
         x2, y2 = node_dict[node2]
-        ax.add_patch(ConnectionPatch(xyA=(x1, y1),xyB=(x2, y2), coordsA=ax.transData))
-        # ax.add_line(Line2D([x1, x2], [y1, y2], linewidth=0.5, color='black'))
+        ax.add_patch(ConnectionPatch(xyA=(x1, y1),xyB=(x2, y2), coordsA=ax.transData, arrowstyle="-|>", color="black", linewidth=1))
 
+    plt.tight_layout()
     return fig, ax
