@@ -478,6 +478,7 @@ source = { editable = "." }
 dependencies = [
     { name = "fastapi", extra = ["standard-no-fastapi-cloud-cli"] },
     { name = "matplotlib" },
+    { name = "numpy" },
     { name = "pyyaml" },
 ]
 
@@ -485,6 +486,7 @@ dependencies = [
 requires-dist = [
     { name = "fastapi", extras = ["standard-no-fastapi-cloud-cli"], specifier = ">=0.137.2" },
     { name = "matplotlib", specifier = "==3.10.8" },
+    { name = "numpy", specifier = ">=2.4.6" },
     { name = "pyyaml", specifier = ">=6.0.3" },
 ]
 
