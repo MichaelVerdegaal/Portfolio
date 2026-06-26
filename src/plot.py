@@ -1,4 +1,5 @@
 import random
+from matplotlib.animation import FuncAnimation
 
 import matplotlib.pyplot as plt
 from matplotlib.collections import PathCollection
@@ -17,8 +18,7 @@ YLIM_MIN, YLIM_MAX = 0, 100
 
 def create_plot():
     fig, ax = plt.subplots()
-    ax.set_xlim(XLIM_MIN, XLIM_MAX)
-    ax.set_ylim(YLIM_MIN, YLIM_MAX)
+    ax.set(xlim=(XLIM_MIN, XLIM_MAX), ylim=(YLIM_MIN, YLIM_MAX))
 
     # Create coordinates
     node_dict: dict = {}
