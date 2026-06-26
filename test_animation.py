@@ -1,26 +1,41 @@
-import math
-
+from matplotlib.animation import FuncAnimation
+import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.pylab import sin
+from matplotlib.collections import PathCollection
+from src.mpl_utils import get_screen_size
+from src.graph import load_graph_data
+
+# Screen info
+screen_x_inches, screen_y_inches = get_screen_size(DPI=100)
+fig_size = (screen_x_inches / 2, screen_y_inches / 2)
+
+# Pyplot settings
+plt.rcParams["figure.figsize"] = fig_size
+
+# Constants
+NODES, EDGES = load_graph_data()
+XLIM_MIN, XLIM_MAX = 0, 100
+YLIM_MIN, YLIM_MAX = 0, 100
+
 
 fig, ax = plt.subplots()
-x = [i * 2 * math.pi / 100 for i in range(100)]
-(line,) = ax.plot(
-    x, [math.sin(i) for i in x]
-)  # Note the comma: ax.plot returns a list of Line2D objects
+ax.set(xlim=(XLIM_MIN, XLIM_MAX), ylim=(YLIM_MIN, YLIM_MAX))
+
+# Create coordinates
+nodes_x = np.random.randint(XLIM_MIN + 10, XLIM_MAX - 10, size=len(NODES))
+nodes_y = np.random.randint(YLIM_MIN + 10, YLIM_MAX - 10, size=len(NODES))
+
+scatter: PathCollection = ax.scatter(nodes_x, nodes_y)
+
+def animate(frame: int):
+    scatter.set_offsets(
+        np.column_stack((np.random.randint(XLIM_MIN + frame, XLIM_MAX -  frame, size=len(NODES)),
+                         np.random.randint(YLIM_MIN + frame, YLIM_MAX -  frame, size=len(NODES))))
+    )
+    return (scatter,)
 
 
-def update_line(new_y):
-    # This is the high-performance way to update a plot
-    line.set_ydata(new_y)
-    fig.canvas.draw()
-    fig.canvas.flush_events()
+plt.tight_layout()
+# anim = FuncAnimation(fig, animate, interval=100, frames=len(NODES)-1, repeat=True)
 
-
-# Simulate a real-time update loop
-i = 0
-while True:
-    updated_y = [sin(j + i / 10.0) for j in x]
-    update_line(updated_y)
-    plt.pause(0.01)
-    i += 1
+plt.show()

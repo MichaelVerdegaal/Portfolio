@@ -6,9 +6,14 @@ from matplotlib.collections import PathCollection
 from matplotlib.patches import ConnectionPatch
 
 from src.graph import load_graph_data
+from src.mpl_utils import get_screen_size
+
+# Screen info
+screen_x_inches, screen_y_inches = get_screen_size(DPI=100)
+fig_size = (screen_x_inches / 2, screen_y_inches / 2)
 
 # Pyplot settings
-plt.rcParams["figure.figsize"] = [15, 7.5]
+plt.rcParams["figure.figsize"] = fig_size
 
 # Constants
 NODES, EDGES = load_graph_data()
@@ -33,7 +38,7 @@ def create_plot():
         node_dict[node] = (coord_x, coord_y)
 
     # Draw nodes (returns list of Path objects)
-    _: PathCollection = ax.scatter(nodes_x, nodes_y)
+    scatter: PathCollection = ax.scatter(nodes_x, nodes_y)
 
     # Draw edges
     for edge in EDGES:
@@ -51,5 +56,13 @@ def create_plot():
             )
         )
 
+    def animate(frame):
+        scatter.set_offsets(
+            [(random.randint(XLIM_MIN + 10, XLIM_MAX - 10), random.randint(YLIM_MIN + 10, YLIM_MAX - 10)) for _ in NODES]
+        )
+        return (scatter,)
+
+
     plt.tight_layout()
-    return fig, ax
+    anim = FuncAnimation(fig, animate, interval=100, frames=len(NODES)-1, repeat=True)
+    return fig, ax, anim
