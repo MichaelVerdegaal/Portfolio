@@ -1,13 +1,13 @@
-import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
 import random
-from src.graph import load_graph_data
+
+import matplotlib.pyplot as plt
+from matplotlib.collections import PathCollection
 from matplotlib.patches import ConnectionPatch
 
-
+from src.graph import load_graph_data
 
 # Pyplot settings
-plt.rcParams['figure.figsize'] = [15, 7.5]
+plt.rcParams["figure.figsize"] = [15, 7.5]
 
 # Constants
 NODES, EDGES = load_graph_data()
@@ -24,21 +24,32 @@ def create_plot():
     node_dict: dict = {}
     nodes_x, nodes_y = [], []
     for node in NODES:
-        coord_x, coord_y = random.randint(XLIM_MIN + 10, XLIM_MAX - 10), random.randint(XLIM_MIN + 10, XLIM_MAX - 10)
+        coord_x, coord_y = (
+            random.randint(XLIM_MIN + 10, XLIM_MAX - 10),
+            random.randint(XLIM_MIN + 10, XLIM_MAX - 10),
+        )
         nodes_x.append(coord_x)
         nodes_y.append(coord_y)
         node_dict[node] = (coord_x, coord_y)
 
-    # Draw nodes
-    # matplotlib.collections.PathCollection
-    nodePaths = ax.scatter(nodes_x, nodes_y)
+    # Draw nodes (returns list of Path objects)
+    _: PathCollection = ax.scatter(nodes_x, nodes_y)
 
     # Draw edges
     for edge in EDGES:
         node1, node2 = edge
         x1, y1 = node_dict[node1]
         x2, y2 = node_dict[node2]
-        ax.add_patch(ConnectionPatch(xyA=(x1, y1),xyB=(x2, y2), coordsA=ax.transData, arrowstyle="-|>", color="black", linewidth=1))
+        ax.add_patch(
+            ConnectionPatch(
+                xyA=(x1, y1),
+                xyB=(x2, y2),
+                coordsA=ax.transData,
+                arrowstyle="-|>",
+                color="black",
+                linewidth=1,
+            )
+        )
 
     plt.tight_layout()
     return fig, ax

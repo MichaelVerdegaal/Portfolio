@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 from pyscript import display, when
+
 from .plot import create_plot
 
 
@@ -10,5 +11,3 @@ def handler():
     # Displays plot as image.
     display(fig)
     plt.close(fig)
-
-

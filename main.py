@@ -2,8 +2,6 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-
-
 # FastAPI app
 app = FastAPI(openapi_url=None)
 # Mount Python files
