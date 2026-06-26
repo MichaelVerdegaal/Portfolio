@@ -1,7 +1,7 @@
 import random
-from matplotlib.animation import FuncAnimation
 
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 from matplotlib.collections import PathCollection
 from matplotlib.patches import ConnectionPatch
 
@@ -58,11 +58,16 @@ def create_plot():
 
     def animate(frame):
         scatter.set_offsets(
-            [(random.randint(XLIM_MIN + 10, XLIM_MAX - 10), random.randint(YLIM_MIN + 10, YLIM_MAX - 10)) for _ in NODES]
+            [
+                (
+                    random.randint(XLIM_MIN + 10, XLIM_MAX - 10),
+                    random.randint(YLIM_MIN + 10, YLIM_MAX - 10),
+                )
+                for _ in NODES
+            ]
         )
         return (scatter,)
 
-
     plt.tight_layout()
-    anim = FuncAnimation(fig, animate, interval=100, frames=len(NODES)-1, repeat=True)
+    anim = FuncAnimation(fig, animate, interval=100, frames=len(NODES) - 1, repeat=True)
     return fig, ax, anim
