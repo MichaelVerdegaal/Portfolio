@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib.collections import PathCollection
 from matplotlib.patches import ConnectionPatch
-
+import numpy as np
 from src.graph import load_graph_data
 from src.mpl_utils import get_screen_size
 
@@ -29,13 +29,10 @@ def create_plot():
     node_dict: dict = {}
     nodes_x, nodes_y = [], []
     for node in NODES:
-        coord_x, coord_y = (
-            random.randint(XLIM_MIN + 10, XLIM_MAX - 10),
-            random.randint(XLIM_MIN + 10, XLIM_MAX - 10),
-        )
-        nodes_x.append(coord_x)
-        nodes_y.append(coord_y)
-        node_dict[node] = (coord_x, coord_y)
+        nodes_x = np.random.randint(XLIM_MIN + 10, XLIM_MAX - 10, size=len(NODES))
+        nodes_y = np.random.randint(YLIM_MIN + 10, YLIM_MAX - 10, size=len(NODES))
+        for i, node in enumerate(NODES):
+            node_dict[node] = (nodes_x[i], nodes_y[i])
 
     # Draw nodes (returns list of Path objects)
     scatter: PathCollection = ax.scatter(nodes_x, nodes_y)
@@ -56,18 +53,5 @@ def create_plot():
             )
         )
 
-    def animate(frame):
-        scatter.set_offsets(
-            [
-                (
-                    random.randint(XLIM_MIN + 10, XLIM_MAX - 10),
-                    random.randint(YLIM_MIN + 10, YLIM_MAX - 10),
-                )
-                for _ in NODES
-            ]
-        )
-        return (scatter,)
-
     plt.tight_layout()
-    anim = FuncAnimation(fig, animate, interval=100, frames=len(NODES) - 1, repeat=True)
-    return fig, ax, anim
+    return fig, ax
