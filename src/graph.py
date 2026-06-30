@@ -1,11 +1,12 @@
 import yaml
 
 
-def load_graph_data() -> tuple[list, list]:
-    with open("src/tree.yaml", "r") as file:
-        tree = yaml.safe_load(file)
-
-    nodes = [n for n in tree["nodes"]]
-    edges = [e for e in tree["edges"]]
-
-    return nodes, edges
+def load_graph_data() -> dict[str, list[str]]:
+    """Load graph data from a YAML file."""
+    with open("src/graph.yaml", "r") as file:
+        graph_yaml = yaml.safe_load(file)
+    # Flatten into a single dict, empty list if no children
+    graph = {}
+    for node in graph_yaml:
+        graph.update(node if isinstance(node, dict) else {node: []})
+    return graph
