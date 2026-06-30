@@ -66,5 +66,5 @@ first_path: Path = scatter.get_paths()[0]
 anim = FuncAnimation(fig, animate, interval=200, frames=20, repeat=True)
 
 fig.tight_layout()
-anim.save(filename="animation.gif", writer="pillow")
+# anim.save(filename="animation.gif", writer="pillow")
 plt.show()
