@@ -1,89 +1,148 @@
-from matplotlib.patches import ConnectionPatch
+from collections.abc import Callable
+
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.axes import Axes
-from matplotlib.collections import PathCollection, LineCollection
-from matplotlib.figure import Figure
-from matplotlib.path import Path
 from matplotlib.animation import FuncAnimation
+from matplotlib.axes import Axes
+from matplotlib.collections import LineCollection
+
 from src.graph import load_graph_data
-from src.mpl_utils import get_screen_size
-import math
+from src.mpl_utils import create_figure
 
-# Screen info
-screen_x_inches, screen_y_inches = get_screen_size()
-fig_size = (screen_x_inches / 2, screen_y_inches / 2)
+np.random.seed(2)
 
-# Pyplot settings
-plt.rcParams["figure.figsize"] = fig_size
-
-# Constants
-GRAPH: dict[str, list[str]] = load_graph_data()
-NODES: list[str] = list(GRAPH.keys())
-XLIM_MIN, XLIM_MAX = 0, 100
-YLIM_MIN, YLIM_MAX = 0, 100
-
-# Create graph
-fig, ax = plt.subplots()
-ax.set(xlim=(XLIM_MIN, XLIM_MAX), ylim=(YLIM_MIN, YLIM_MAX))
-
-# Create indices
-node_index = {name: i for i , name in enumerate(NODES)}
-edge_index = np.array(
-    [(node_index[v], node_index[u]) for v, neighbors in GRAPH.items() for u in neighbors]
-)
-
-# Create coordinates
-nodes_coords = np.random.uniform(low=XLIM_MIN + 20, high=XLIM_MAX - 20, size=(len(NODES), 2))
-
-# Draw nodes
-scatter: PathCollection = ax.scatter(nodes_coords[:, 0], nodes_coords[:, 1])
-
-# Draw edges
-edge_lines = LineCollection(nodes_coords[edge_index], colors="black", linewidths=1, zorder=1)
-ax.add_collection(edge_lines)
-
-# More constants
-INTERVAL = 200  # milliseconds
-DURATION_SECONDS = 10  # seconds
-DURATION = DURATION_SECONDS * 1000 // INTERVAL  # number of frames
+# --- Config -----------------------------------------------------------------
+XLIM = (0, 100)  # X-axis limits
+YLIM = (0, 100)  # Y-axis limits
+SPAWN_MARGIN = 20  # Margin for spawning nodes
+INTERVAL_MS = 10  # Animation interval in milliseconds
+DURATION_SECONDS = 5  # Animation duration in seconds
+FRAMES = DURATION_SECONDS * 1000 // INTERVAL_MS  # Number of frames in the animation
+SAVE_PATH: str | None = None  # e.g. "animation.gif", None = show only
 
 
-# Calculate mean edge length once
-MEAN_EDGE_LENGTH = np.mean([np.hypot(*(nodes_coords[b] - nodes_coords[a])) for a, b in edge_index])
+# --- Scene: owns the graph data and the matplotlib artists -------------------
+class GraphScene:
+    """Wraps node coords, edge index, and the two artists behind one draw()."""
 
-def compute_layout(nodes, step_size=0.1):
-    displacement = np.zeros_like(nodes)
-    
-    for a, b in edge_index:
-        node_a = nodes[a]
-        node_b = nodes[b]
-        d = node_b - node_a
+    def __init__(self, graph: dict[str, list[str]], ax: Axes):
+        self.names = list(graph.keys())
+        index = {name: i for i, name in enumerate(self.names)}
+        self.edges = np.array(
+            [(index[v], index[u]) for v, nbrs in graph.items() for u in nbrs]
+        )
+        self.coords = np.random.uniform(
+            low=XLIM[0] + SPAWN_MARGIN,
+            high=XLIM[1] - SPAWN_MARGIN,
+            size=(len(self.names), 2),
+        )
+        self._edge_lines = LineCollection([], colors="black", linewidths=1, zorder=1)
+        ax.add_collection(self._edge_lines)
+        self._scatter = ax.scatter(self.coords[:, 0], self.coords[:, 1], zorder=2)
+        self.draw(self.coords)
+
+    def draw(self, coords: np.ndarray) -> None:
+        self._scatter.set_offsets(coords)
+        self._edge_lines.set_segments(coords[self.edges])
+
+    def edge_lengths(self, coords: np.ndarray) -> np.ndarray:
+        d = coords[self.edges[:, 1]] - coords[self.edges[:, 0]]
+        return np.hypot(d[:, 0], d[:, 1])
+
+    @property
+    def artists(self) -> tuple:
+        return self._scatter, self._edge_lines
+
+
+# --- Layout functions ---------------------------------------------------------
+def equalize_edges_step(
+    coords: np.ndarray,
+    edges: np.ndarray,
+    target_len: float,
+    step_size: float = 0.05,
+) -> np.ndarray:
+    """One relaxation step pulling every edge toward target_len.
+
+    Returns:
+        Displacement array, same shape as coords.
+    """
+    disp = np.zeros_like(coords)
+    for a, b in edges:
+        d = coords[b] - coords[a]
         dist = np.hypot(*d)
-        
-        correction = d / dist *  (dist - MEAN_EDGE_LENGTH) * step_size
-        displacement[a] += correction
-        displacement[b] -= correction
+        correction = d / dist * (dist - target_len) * step_size
+        disp[a] += correction
+        disp[b] -= correction
+    return disp
 
-    return displacement
 
+# --- History builders: every mode ends as a (frames, N, 2) array ---------------
+def ease_cubic(t: float) -> float:
+    return 4 * t * t * t if t < 0.5 else 1 - (-2 * t + 2) ** 3 / 2
+
+
+def tween_history(
+    start: np.ndarray,
+    target: np.ndarray,
+    frames: int,
+    ease: Callable[[float], float] = ease_cubic,
+) -> np.ndarray:
+    """One-shot: interpolate from start to a precomputed target layout."""
+    t = np.array([ease(i / (frames - 1)) for i in range(frames)])
+    return start + (target - start) * t[:, None, None]
+
+
+def settle_history(
+    start: np.ndarray,
+    layout_fn: Callable[[np.ndarray], np.ndarray],
+    frames: int,
+    step_size: float = 0.1,
+) -> np.ndarray:
+    """One-shot made iterative: recompute the layout each frame, move a
+    fraction toward it instead of jumping."""
+    history = np.empty((frames, *start.shape))
+    pos = start.copy()
+    for i in range(frames):
+        history[i] = pos
+        pos = pos + (layout_fn(pos) - pos) * step_size
+    return history
+
+
+def step_history(
+    start: np.ndarray,
+    step_fn: Callable[[np.ndarray], np.ndarray],
+    frames: int,
+) -> np.ndarray:
+    """Iterative: step_fn returns a displacement, applied cumulatively."""
+    history = np.empty((frames, *start.shape))
+    pos = start.copy()
+    for i in range(frames):
+        history[i] = pos
+        pos = pos + step_fn(pos)
+    return history
+
+
+# --- Main ----------------------------------------------------------------------
+fig, ax = create_figure()
+scene = GraphScene(load_graph_data(), ax)
+
+target_len = scene.edge_lengths(scene.coords).mean()
+# history = step_history(
+#     scene.coords,
+#     lambda pos: equalize_edges_step(pos, scene.edges, target_len),
+#     FRAMES,
+# )
+final_correction = equalize_edges_step(scene.coords, scene.edges, target_len, step_size=1.0)
+final_layout = scene.coords + final_correction
+history = tween_history(scene.coords, final_layout, FRAMES)
 
 def animate(frame: int):
-    # Get coordinates
-    coordinates: np.ndarray = scatter.get_offsets()
-
-    # Transform coordinates
-    displacement = compute_layout(coordinates)
-    new_coordinates = coordinates + displacement
-
-    # Set new coordinates
-    scatter.set_offsets(new_coordinates)
-    edge_lines.set_segments(new_coordinates[edge_index])   
-    return (scatter,)
+    scene.draw(history[frame])
+    return scene.artists
 
 
-# Show and save animation
-anim = FuncAnimation(fig, animate, interval=INTERVAL, frames=DURATION, repeat=True)
+anim = FuncAnimation(fig, animate, interval=INTERVAL_MS, frames=FRAMES, repeat=True)
 fig.tight_layout()
-anim.save(filename="animation.gif", writer="pillow")
+if SAVE_PATH:
+    anim.save(SAVE_PATH, writer="pillow")
 plt.show()

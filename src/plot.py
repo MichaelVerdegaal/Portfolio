@@ -1,10 +1,8 @@
-import random
-
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
+import numpy as np
 from matplotlib.collections import PathCollection
 from matplotlib.patches import ConnectionPatch
-import numpy as np
+
 from src.graph import load_graph_data
 from src.mpl_utils import get_screen_size
 
@@ -35,7 +33,7 @@ def create_plot():
             node_dict[node] = (nodes_x[i], nodes_y[i])
 
     # Draw nodes (returns list of Path objects)
-    scatter: PathCollection = ax.scatter(nodes_x, nodes_y)
+    _: PathCollection = ax.scatter(nodes_x, nodes_y)
 
     # Draw edges
     for edge in EDGES:

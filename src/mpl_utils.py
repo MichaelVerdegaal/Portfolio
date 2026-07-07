@@ -2,6 +2,10 @@ import ctypes
 import sys
 import tkinter
 
+import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
+
 
 def get_screen_size(dpi: int = 100) -> tuple[float, float]:
     """Get the primary screen size in inches.
@@ -34,3 +38,26 @@ def get_screen_size(dpi: int = 100) -> tuple[float, float]:
         root.destroy()
 
     return width_px / dpi, height_px / dpi
+
+
+def create_figure(
+    figsize: tuple[float, float] | None = None,
+    xlim: tuple[float, float] = (0, 100),
+    ylim: tuple[float, float] = (0, 100),
+) -> tuple[Figure, Axes]:
+    """Create a matplotlib figure and axes with specified limits.
+
+    Args:
+        figsize: Optional tuple specifying the figure size in inches.
+        xlim: Tuple specifying the x-axis limits.
+        ylim: Tuple specifying the y-axis limits.
+
+    Returns:
+        A tuple containing the created Figure and Axes objects.
+    """
+    if figsize is None:
+        screen_x_inches, screen_y_inches = get_screen_size()
+        figsize = (screen_x_inches / 2, screen_y_inches / 2)
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set(xlim=xlim, ylim=ylim)
+    return fig, ax
