@@ -43,28 +43,47 @@ scatter: PathCollection = ax.scatter(nodes_coords[:, 0], nodes_coords[:, 1])
 edge_lines = LineCollection(nodes_coords[edge_index], colors="black", linewidths=1, zorder=1)
 ax.add_collection(edge_lines)
 
+# More constants
+INTERVAL = 200  # milliseconds
+DURATION_SECONDS = 10  # seconds
+DURATION = DURATION_SECONDS * 1000 // INTERVAL  # number of frames
+
+
+# Calculate mean edge length once
+MEAN_EDGE_LENGTH = np.mean([np.hypot(*(nodes_coords[b] - nodes_coords[a])) for a, b in edge_index])
+
+def compute_layout(nodes, step_size=0.1):
+    displacement = np.zeros_like(nodes)
     
-AMPLITUDE = 5
-phase = np.linspace(0, 2 * np.pi, len(NODES), endpoint=False).astype(np.float32)
+    for a, b in edge_index:
+        node_a = nodes[a]
+        node_b = nodes[b]
+        d = node_b - node_a
+        dist = np.hypot(*d)
+        
+        correction = d / dist *  (dist - MEAN_EDGE_LENGTH) * step_size
+        displacement[a] += correction
+        displacement[b] -= correction
+
+    return displacement
+
 
 def animate(frame: int):
     # Get coordinates
     coordinates: np.ndarray = scatter.get_offsets()
 
     # Transform coordinates
-    coordinates[:, 1] += AMPLITUDE * np.sin(frame + phase)
+    displacement = compute_layout(coordinates)
+    new_coordinates = coordinates + displacement
 
     # Set new coordinates
-    scatter.set_offsets(coordinates)
-    edge_lines.set_segments(coordinates[edge_index])   
+    scatter.set_offsets(new_coordinates)
+    edge_lines.set_segments(new_coordinates[edge_index])   
     return (scatter,)
 
 
-# get first object of the PathCollection
-first_path: Path = scatter.get_paths()[0]
-
-anim = FuncAnimation(fig, animate, interval=200, frames=20, repeat=True)
-
+# Show and save animation
+anim = FuncAnimation(fig, animate, interval=INTERVAL, frames=DURATION, repeat=True)
 fig.tight_layout()
-# anim.save(filename="animation.gif", writer="pillow")
+anim.save(filename="animation.gif", writer="pillow")
 plt.show()
