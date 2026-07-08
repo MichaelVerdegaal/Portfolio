@@ -132,9 +132,12 @@ target_len = scene.edge_lengths(scene.coords).mean()
 #     lambda pos: equalize_edges_step(pos, scene.edges, target_len),
 #     FRAMES,
 # )
-final_correction = equalize_edges_step(scene.coords, scene.edges, target_len, step_size=1.0)
+final_correction = equalize_edges_step(
+    scene.coords, scene.edges, target_len, step_size=1.0
+)
 final_layout = scene.coords + final_correction
 history = tween_history(scene.coords, final_layout, FRAMES)
+
 
 def animate(frame: int):
     scene.draw(history[frame])

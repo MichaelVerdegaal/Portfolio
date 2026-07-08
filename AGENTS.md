@@ -3,9 +3,7 @@
 My personal portfolio website.
 
 ## Code Standards
-
-✅ **Always do:**
-
+ALWAYS:
 - Type hint all function parameters and return types. Prefer builtin types (`list`, `dict`) over
   `typing` module types (`List`, `Dict`).
 - Use Google docstring style.
@@ -15,15 +13,13 @@ My personal portfolio website.
 - Use relative imports within the same module.
 - Use `pathlib` over `os` for file paths.
 
-⚠️ **Ask first:**
-
+ASK FIRST:
 - Adding dependencies beyond core stack
 - Changing the SQLite schema
 - Modifying URL processing rules or rewriters
 - Changing scraping/conversion pipeline flow
 
-🚫 **Never do:**
-
+NEVER:
 - Skip type hints on functions
 - Hardcode file paths
 - Use lazy imports inside functions
@@ -31,7 +27,7 @@ My personal portfolio website.
 - Use premature abstraction, design patterns for their own sake, or metaprogramming where a simple
   function would do
 
-# Formatting requirements
+## Formatting requirements
 Avoid the stylistic tics common to LLM output. Don't inflate importance: skip phrases like "stands
 as a testament to", "plays a vital/pivotal/crucial role", "rich tapestry", "vibrant", "underscores
 its significance", or claims that some mundane detail "reflects a broader" trend. Don't tack
@@ -42,10 +38,19 @@ meticulous, landscape (figurative), realm, nestled, leverage. Don't overuse the 
 used, not utilized; has, not features). Use straight quotes and apostrophes, no em-dashes, no curly
 quotes. Don't end with a "Conclusion" or "In summary" restatement, and don't add a "Despite its
 challenges..." wrap-up. Don't pad with hedges ("it's important to note", "it's worth mentioning").
-Don't add knowledge- cutoff or "based on available information" disclaimers. Don't over-bold, don't
+Don't add knowledge-cutoff or "based on available information" disclaimers. Don't over-bold, don't
 turn every list item into "**Bolded label**: explanation", and don't put every section in Title
 Case. Match length and formality to the task; default to fewer words, concrete specifics over
 generic praise, and a real voice over a neutral encyclopedic hum.
+
+Don't restate the takeaway after demonstrating it: if a section, example, or code sample already
+makes the point, don't add a sentence explaining what it shows or why it matters. In documentation,
+describe what something does once; skip the closing "this ensures/enables..." interpretation. State
+things plainly instead of through stock indirect formulas: write "this is slow" not "performance
+leaves something to be desired". Plain statements are shorter and easier to follow. Don't resolve
+everything in one pass. It's fine, often better, to deliver the core change, name what's left open,
+and stop. Prefer "X works now; Y and Z are untouched" over silently expanding scope to tie up every
+loose end. Open questions and known limitations are allowed to stay open.
 
 For generated code: don't docstring or comment trivial functions; comment only where logic is
 non-obvious. Use specific, contextual names, not generic data/result/temp/process_data. Add error
@@ -54,4 +59,6 @@ swallows exceptions. Don't over-engineer: no repository patterns, abstract base 
 or dependency injection for problems that don't need them. Prefer stdlib over pulling a library per
 sub-problem; don't grow the dependency list unnecessarily. Clean up after iteration: remove dead
 code, unused functions, and orphaned imports rather than leaving them. Calibrate structure to the
-actual requirement instead of applying "best practice" boilerplate by default.
+actual requirement instead of applying "best practice" boilerplate by default. Stay within the asked
+scope: don't opportunistically refactor, rename, or add tests or features that weren't requested;
+mention them as follow-ups instead.
