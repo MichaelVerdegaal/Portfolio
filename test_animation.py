@@ -13,14 +13,18 @@ from src.mpl_utils import create_figure
 
 np.random.seed(3)
 
-# Config
-INTERVAL_MS: int = 10  # Animation interval in milliseconds
-DURATION_SECONDS: int = 5  # Animation duration in seconds
-FRAMES: int = (
-    DURATION_SECONDS // INTERVAL_MS
-) * 1000  # Number of frames in the animation
+# Config styling
+COLOR_NODES: str = "#ff8f40"
+COLOR_EDGES: str = "#bbb9b2"
+COLOR_BG: str = "#101010"
 
+# Config animation
+TARGET_FPS = 60
+DURATION_SECONDS: int = 5  # Animation duration in seconds
+INTERVAL_MS: int  = 1000 // TARGET_FPS  # Animation interval in milliseconds
+FRAMES = int(DURATION_SECONDS * TARGET_FPS)  # Total number of frames in the animation
 SAVE_PATH: str | None = None  # e.g. "animation.gif", None = show only
+print(f"{TARGET_FPS=}, {DURATION_SECONDS=}, {INTERVAL_MS=}, {FRAMES=}")
 
 # Load data from YAML
 graph_dict: dict[str, list[str]] = load_graph_data()
@@ -98,10 +102,10 @@ class GraphScene:
 
         # Create nodes/edges with PathCollection and LineCollection
         self._scatter: PathCollection = ax.scatter(
-            graph.coords_x, graph.coords_y, zorder=2
+            graph.coords_x, graph.coords_y, color=COLOR_NODES, zorder=2
         )
         self._edge_lines: LineCollection = LineCollection(
-            [], colors="black", linewidths=1, zorder=1
+            [], color=COLOR_EDGES, linewidths=1, zorder=1
         )
         _ = ax.add_collection(self._edge_lines)
         self._edge_lines.set_segments(self.graph.coords[graph.edges])
@@ -176,7 +180,7 @@ def step_history(
 
 
 # --- Main ----------------------------------------------------------------------
-fig, ax = create_figure()
+fig, ax = create_figure(bg_color=COLOR_BG)
 G: Graph = Graph(graph_dict)
 GScene: GraphScene = GraphScene(G, fig, ax)
 
@@ -184,7 +188,7 @@ target_len: np.float64 = GScene.edge_lengths.mean()
 final_layout: npt.NDArray[np.float64] = np.random.uniform(
     low=0, high=80, size=(len(GScene.graph.node_names), 2)
 )
-history = tween_history(GScene.coords, final_layout, 100)
+history = tween_history(GScene.coords, final_layout, FRAMES)
 
 
 def animate(frame: int):
@@ -198,6 +202,6 @@ def animate(frame: int):
     return GScene._scatter, GScene._edge_lines
 
 
-anim = FuncAnimation(fig, animate, interval=INTERVAL_MS, frames=100, repeat=False)
+anim = FuncAnimation(fig, func=animate, interval=INTERVAL_MS, frames=FRAMES, repeat=True)
 fig.tight_layout()
 plt.show()

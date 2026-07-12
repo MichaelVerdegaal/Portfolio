@@ -44,6 +44,8 @@ def create_figure(
     figsize: tuple[float, float] | None = None,
     xlim: tuple[float, float] = (0, 100),
     ylim: tuple[float, float] = (0, 100),
+    bg_color: str | None = None,
+    disable_axis: bool = True,
 ) -> tuple[Figure, Axes]:
     """Create a matplotlib figure and axes with specified limits.
 
@@ -51,6 +53,7 @@ def create_figure(
         figsize: Optional tuple specifying the figure size in inches.
         xlim: Tuple specifying the x-axis limits.
         ylim: Tuple specifying the y-axis limits.
+        bg_color: Background color for the figure and axes.
 
     Returns:
         A tuple containing the created Figure and Axes objects.
@@ -60,4 +63,12 @@ def create_figure(
         figsize = (screen_x_inches / 2, screen_y_inches / 2)
     fig, ax = plt.subplots(figsize=figsize)
     ax.set(xlim=xlim, ylim=ylim)
+    
+    if bg_color is not None:
+        fig.patch.set_facecolor(bg_color)
+        ax.set_facecolor(bg_color)
+
+    if disable_axis:
+        ax.axis("off")
+
     return fig, ax
