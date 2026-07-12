@@ -2,110 +2,163 @@ from collections.abc import Callable
 
 import matplotlib.pyplot as plt
 import numpy as np
+import numpy.typing as npt
 from matplotlib.animation import FuncAnimation
 from matplotlib.axes import Axes
-from matplotlib.collections import LineCollection
+from matplotlib.collections import LineCollection, PathCollection
+from matplotlib.figure import Figure
 
 from src.graph import load_graph_data
 from src.mpl_utils import create_figure
 
-np.random.seed(2)
+np.random.seed(3)
 
-# --- Config -----------------------------------------------------------------
-XLIM = (0, 100)  # X-axis limits
-YLIM = (0, 100)  # Y-axis limits
-SPAWN_MARGIN = 20  # Margin for spawning nodes
-INTERVAL_MS = 10  # Animation interval in milliseconds
-DURATION_SECONDS = 5  # Animation duration in seconds
-FRAMES = DURATION_SECONDS * 1000 // INTERVAL_MS  # Number of frames in the animation
+# Config
+INTERVAL_MS: int = 10  # Animation interval in milliseconds
+DURATION_SECONDS: int = 5  # Animation duration in seconds
+FRAMES: int = (
+    DURATION_SECONDS // INTERVAL_MS
+) * 1000  # Number of frames in the animation
+
 SAVE_PATH: str | None = None  # e.g. "animation.gif", None = show only
 
+# Load data from YAML
+graph_dict: dict[str, list[str]] = load_graph_data()
 
-# --- Scene: owns the graph data and the matplotlib artists -------------------
-class GraphScene:
-    """Wraps node coords, edge index, and the two artists behind one draw()."""
 
-    def __init__(self, graph: dict[str, list[str]], ax: Axes):
-        self.names = list(graph.keys())
-        index = {name: i for i, name in enumerate(self.names)}
-        self.edges = np.array(
-            [(index[v], index[u]) for v, nbrs in graph.items() for u in nbrs]
+# Scene: owns the graph data and the matplotlib artists
+class Graph:
+    """
+    Main class for managing graph data, including nodes, edges, and their coordinates.
+
+    Coordinates are initialized randomly within the limits of XLIM & YLIM
+    """
+
+    def __init__(
+        self,
+        graph: dict[str, list[str]],
+        axis_lim: tuple[int, int] = (0, 100),
+        spawn_margin: int = 20,
+    ):
+        """
+        Initialize graph based on dictionary
+
+        args:
+            graph: dictionary with graph data, adjacency list format
+            axis_lim: tuple of axis limits used for plot creation and node spawning
+            spawn_margin: subtracted from axis limits to nodes don't spawn on the edge
+        """
+
+        # Nodes
+        self.node_names: list[str] = list(graph.keys())
+        self.index: dict[str, int] = {name: i for i, name in enumerate(self.node_names)}
+
+        # Edges
+        self.edges: np.ndarray[tuple[int, ...]] = np.array(
+            [
+                (self.index[node_start], self.index[node_end])
+                for node_start, neighbours in graph.items()
+                for node_end in neighbours
+            ],
+            dtype=np.int32,
         )
-        self.coords = np.random.uniform(
-            low=XLIM[0] + SPAWN_MARGIN,
-            high=XLIM[1] - SPAWN_MARGIN,
-            size=(len(self.names), 2),
+
+        # Node coordinates
+        self.coords: npt.NDArray[np.float64] = np.random.uniform(
+            low=axis_lim[0] + spawn_margin,
+            high=axis_lim[1] - spawn_margin,
+            size=(len(self.node_names), 2),
         )
-        self._edge_lines = LineCollection([], colors="black", linewidths=1, zorder=1)
-        ax.add_collection(self._edge_lines)
-        self._scatter = ax.scatter(self.coords[:, 0], self.coords[:, 1], zorder=2)
-        self.draw(self.coords)
-
-    def draw(self, coords: np.ndarray) -> None:
-        self._scatter.set_offsets(coords)
-        self._edge_lines.set_segments(coords[self.edges])
-
-    def edge_lengths(self, coords: np.ndarray) -> np.ndarray:
-        d = coords[self.edges[:, 1]] - coords[self.edges[:, 0]]
-        return np.hypot(d[:, 0], d[:, 1])
 
     @property
-    def artists(self) -> tuple:
-        return self._scatter, self._edge_lines
+    def coords_x(self) -> npt.NDArray[np.float64]:
+        return self.coords[:, 0]
+
+    @property
+    def coords_y(self) -> npt.NDArray[np.float64]:
+        return self.coords[:, 1]
+
+    @property
+    def edges_start(self) -> npt.NDArray[np.int32]:
+        return self.edges[:, 0]
+
+    @property
+    def edges_end(self) -> npt.NDArray[np.int32]:
+        return self.edges[:, 1]
+
+    @property
+    def edge_lengths(self) -> npt.NDArray[np.float64]:
+        d = self.coords[self.edges_end] - self.coords[self.edges_start]
+        return np.hypot(d[:, 0], d[:, 1])
 
 
-# --- Layout functions ---------------------------------------------------------
-def equalize_edges_step(
-    coords: np.ndarray,
-    edges: np.ndarray,
-    target_len: float,
-    step_size: float = 0.05,
-) -> np.ndarray:
-    """One relaxation step pulling every edge toward target_len.
+class GraphScene:
+    def __init__(self, graph: Graph, fig: Figure, ax: Axes):
+        self.graph: Graph = graph
 
-    Returns:
-        Displacement array, same shape as coords.
-    """
-    disp = np.zeros_like(coords)
-    for a, b in edges:
-        d = coords[b] - coords[a]
-        dist = np.hypot(*d)
-        correction = d / dist * (dist - target_len) * step_size
-        disp[a] += correction
-        disp[b] -= correction
-    return disp
+        # Create nodes/edges with PathCollection and LineCollection
+        self._scatter: PathCollection = ax.scatter(
+            graph.coords_x, graph.coords_y, zorder=2
+        )
+        self._edge_lines: LineCollection = LineCollection(
+            [], colors="black", linewidths=1, zorder=1
+        )
+        _ = ax.add_collection(self._edge_lines)
+        self._edge_lines.set_segments(self.graph.coords[graph.edges])
+
+    @property
+    def coords(self) -> npt.NDArray[np.float64]:
+        return self.graph.coords
+
+    @coords.setter
+    def coords(self, new_coords: npt.NDArray[np.float64]) -> None:
+        self.graph.coords = new_coords
+        self.move_nodes(new_coords)
+
+    @property
+    def coords_x(self) -> npt.NDArray[np.float64]:
+        return self.graph.coords_x
+
+    @property
+    def coords_y(self) -> npt.NDArray[np.float64]:
+        return self.graph.coords_y
+
+    @property
+    def edges(self) -> npt.NDArray[np.int32]:
+        return self.graph.edges
+
+    @property
+    def edges_start(self) -> npt.NDArray[np.int32]:
+        return self.graph.edges_start
+
+    @property
+    def edges_end(self) -> npt.NDArray[np.int32]:
+        return self.graph.edges_end
+
+    @property
+    def edge_lengths(self) -> npt.NDArray[np.float64]:
+        return self.graph.edge_lengths
+
+    def move_nodes(self, new_coords: npt.ArrayLike) -> None:
+        self._scatter.set_offsets(new_coords)
+        self._edge_lines.set_segments(new_coords[self.edges])
 
 
 # --- History builders: every mode ends as a (frames, N, 2) array ---------------
-def ease_cubic(t: float) -> float:
-    return 4 * t * t * t if t < 0.5 else 1 - (-2 * t + 2) ** 3 / 2
+def ease_bezier(t: float) -> float:
+    """Cubic bezier easing function for smooth transition"""
+    return t * t * (3 - 2 * t)
 
 
 def tween_history(
     start: np.ndarray,
     target: np.ndarray,
     frames: int,
-    ease: Callable[[float], float] = ease_cubic,
+    ease: Callable[[float], float] = ease_bezier,
 ) -> np.ndarray:
     """One-shot: interpolate from start to a precomputed target layout."""
     t = np.array([ease(i / (frames - 1)) for i in range(frames)])
     return start + (target - start) * t[:, None, None]
-
-
-def settle_history(
-    start: np.ndarray,
-    layout_fn: Callable[[np.ndarray], np.ndarray],
-    frames: int,
-    step_size: float = 0.1,
-) -> np.ndarray:
-    """One-shot made iterative: recompute the layout each frame, move a
-    fraction toward it instead of jumping."""
-    history = np.empty((frames, *start.shape))
-    pos = start.copy()
-    for i in range(frames):
-        history[i] = pos
-        pos = pos + (layout_fn(pos) - pos) * step_size
-    return history
 
 
 def step_history(
@@ -124,28 +177,27 @@ def step_history(
 
 # --- Main ----------------------------------------------------------------------
 fig, ax = create_figure()
-scene = GraphScene(load_graph_data(), ax)
+G: Graph = Graph(graph_dict)
+GScene: GraphScene = GraphScene(G, fig, ax)
 
-target_len = scene.edge_lengths(scene.coords).mean()
-# history = step_history(
-#     scene.coords,
-#     lambda pos: equalize_edges_step(pos, scene.edges, target_len),
-#     FRAMES,
-# )
-final_correction = equalize_edges_step(
-    scene.coords, scene.edges, target_len, step_size=1.0
+target_len: np.float64 = GScene.edge_lengths.mean()
+final_layout: npt.NDArray[np.float64] = np.random.uniform(
+    low=0, high=80, size=(len(GScene.graph.node_names), 2)
 )
-final_layout = scene.coords + final_correction
-history = tween_history(scene.coords, final_layout, FRAMES)
+history = tween_history(GScene.coords, final_layout, 100)
 
 
 def animate(frame: int):
-    scene.draw(history[frame])
-    return scene.artists
+    # coords = GScene.coords
+
+    # transform
+    new_coords = history[frame]
+
+    # update scene
+    GScene.coords = new_coords
+    return GScene._scatter, GScene._edge_lines
 
 
-anim = FuncAnimation(fig, animate, interval=INTERVAL_MS, frames=FRAMES, repeat=True)
+anim = FuncAnimation(fig, animate, interval=INTERVAL_MS, frames=100, repeat=False)
 fig.tight_layout()
-if SAVE_PATH:
-    anim.save(SAVE_PATH, writer="pillow")
 plt.show()
