@@ -1,8 +1,18 @@
+import numpy as np
+import numpy.typing as npt
 import yaml
+from matplotlib.axes import Axes
+from matplotlib.collections import LineCollection, PathCollection
+from matplotlib.figure import Figure
+
+from src.mpl_utils import COLOR_EDGES, COLOR_NODES
+
+# Set randomness
+np.random.seed(3)
 
 
 def load_graph_data() -> dict[str, list[str]]:
-    """Load graph data from a YAML file."""
+    """Load graph data in adjacency list formatfrom a YAML file."""
     with open("src/graph.yaml") as file:
         graph_yaml = yaml.safe_load(file)
     # Flatten into a single dict, empty list if no children
@@ -10,3 +20,123 @@ def load_graph_data() -> dict[str, list[str]]:
     for node in graph_yaml:
         graph.update(node if isinstance(node, dict) else {node: []})
     return graph
+
+
+class Graph:
+    """
+    Main class for managing graph data, including nodes, edges, and their coordinates.
+
+    Coordinates are initialized randomly within the limits of XLIM & YLIM
+    """
+
+    def __init__(
+        self,
+        graph: dict[str, list[str]],
+        axis_lim: tuple[int, int] = (0, 100),
+        spawn_margin: int = 20,
+    ):
+        """
+        Initialize graph based on dictionary
+
+        args:
+            graph: dictionary with graph data, adjacency list format
+            axis_lim: tuple of axis limits used for plot creation and node spawning
+            spawn_margin: subtracted from axis limits to nodes don't spawn on the edge
+        """
+
+        # Nodes
+        self.node_names: list[str] = list(graph.keys())
+        self.index: dict[str, int] = {name: i for i, name in enumerate(self.node_names)}
+
+        # Edges
+        self.edges: np.ndarray[tuple[int, ...]] = np.array(
+            [
+                (self.index[node_start], self.index[node_end])
+                for node_start, neighbours in graph.items()
+                for node_end in neighbours
+            ],
+            dtype=np.int32,
+        )
+
+        # Node coordinates
+        self.coords: npt.NDArray[np.float64] = np.random.uniform(
+            low=axis_lim[0] + spawn_margin,
+            high=axis_lim[1] - spawn_margin,
+            size=(len(self.node_names), 2),
+        )
+
+    @property
+    def coords_x(self) -> npt.NDArray[np.float64]:
+        return self.coords[:, 0]
+
+    @property
+    def coords_y(self) -> npt.NDArray[np.float64]:
+        return self.coords[:, 1]
+
+    @property
+    def edges_start(self) -> npt.NDArray[np.int32]:
+        return self.edges[:, 0]
+
+    @property
+    def edges_end(self) -> npt.NDArray[np.int32]:
+        return self.edges[:, 1]
+
+    @property
+    def edge_lengths(self) -> npt.NDArray[np.float64]:
+        d = self.coords[self.edges_end] - self.coords[self.edges_start]
+        return np.hypot(d[:, 0], d[:, 1])
+
+    def get_node_index(self, name: str) -> int | None:
+        return self.index.get(name, None)
+
+
+class GraphScene:
+    def __init__(self, graph: Graph, fig: Figure, ax: Axes):
+        self.graph: Graph = graph
+
+        # Create nodes/edges with PathCollection and LineCollection
+        self._scatter: PathCollection = ax.scatter(
+            graph.coords_x, graph.coords_y, color=COLOR_NODES, zorder=2
+        )
+        self._edge_lines: LineCollection = LineCollection(
+            [], color=COLOR_EDGES, linewidths=1, zorder=1
+        )
+        _ = ax.add_collection(self._edge_lines)
+        self._edge_lines.set_segments(self.graph.coords[graph.edges])
+
+    @property
+    def coords(self) -> npt.NDArray[np.float64]:
+        return self.graph.coords
+
+    @coords.setter
+    def coords(self, new_coords: npt.NDArray[np.float64]) -> None:
+        self.graph.coords = new_coords
+        self.move_nodes(new_coords)
+
+    @property
+    def coords_x(self) -> npt.NDArray[np.float64]:
+        return self.graph.coords_x
+
+    @property
+    def coords_y(self) -> npt.NDArray[np.float64]:
+        return self.graph.coords_y
+
+    @property
+    def edges(self) -> npt.NDArray[np.int32]:
+        return self.graph.edges
+
+    @property
+    def edges_start(self) -> npt.NDArray[np.int32]:
+        return self.graph.edges_start
+
+    @property
+    def edges_end(self) -> npt.NDArray[np.int32]:
+        return self.graph.edges_end
+
+    @property
+    def edge_lengths(self) -> npt.NDArray[np.float64]:
+        return self.graph.edge_lengths
+
+    def move_nodes(self, new_coords: npt.ArrayLike) -> None:
+        self._scatter.set_offsets(new_coords)
+        self._edge_lines.set_segments(new_coords[self.edges])

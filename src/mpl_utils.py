@@ -6,6 +6,11 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
+# Color constants
+COLOR_BG: str = "#101010"
+COLOR_NODES: str = "#ff8f40"
+COLOR_EDGES: str = "#bbb9b2"
+
 
 def get_screen_size(dpi: int = 100) -> tuple[float, float]:
     """Get the primary screen size in inches.
@@ -44,7 +49,7 @@ def create_figure(
     figsize: tuple[float, float] | None = None,
     xlim: tuple[float, float] = (0, 100),
     ylim: tuple[float, float] = (0, 100),
-    bg_color: str | None = None,
+    bg_color: str | None = COLOR_BG,
     disable_axis: bool = True,
 ) -> tuple[Figure, Axes]:
     """Create a matplotlib figure and axes with specified limits.
@@ -63,7 +68,7 @@ def create_figure(
         figsize = (screen_x_inches / 2, screen_y_inches / 2)
     fig, ax = plt.subplots(figsize=figsize)
     ax.set(xlim=xlim, ylim=ylim)
-    
+
     if bg_color is not None:
         fig.patch.set_facecolor(bg_color)
         ax.set_facecolor(bg_color)
