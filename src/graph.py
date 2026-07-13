@@ -47,10 +47,9 @@ class Graph:
             axis_lim: tuple of axis limits used for plot creation and node spawning
             spawn_margin: subtracted from axis limits to nodes don't spawn on the edge
         """
-
         # Nodes
-        self.node_names: list[str] = list(graph.keys())
-        self.index: dict[str, int] = {name: i for i, name in enumerate(self.node_names)}
+        self._graph: dict[str, list[str]] = graph
+        self.index: dict[str, int] = {name: i for i, name in enumerate(graph.keys())}
 
         # Edges
         self._edges: np.ndarray[tuple[int, ...]] = np.array(
@@ -66,7 +65,7 @@ class Graph:
         self._coords: npt.NDArray[np.float64] = np.random.uniform(
             low=axis_lim[0] + spawn_margin,
             high=axis_lim[1] - spawn_margin,
-            size=(len(self.node_names), 2),
+            size=(len(self._graph), 2),
         )
 
         # Matplotlib, Create nodes with PathCollection and edges with LineCollection
@@ -122,3 +121,27 @@ class Graph:
 
     def get_node_index(self, name: str) -> int | None:
         return self.index.get(name, None)
+
+    def get_node_coords(self, name: str) -> npt.NDArray[np.float64] | None:
+        """Return the X-Y coordinates of a node by name."""
+        index = self.get_node_index(name)
+        if index is not None:
+            return self.coords[index]
+        return None
+
+    def get_children(self, name: str) -> list[str]:
+        """Return the children of a node by name."""
+        children = self._graph.get(name, None)
+        return children if children is not None else []
+
+    def get_node(self, name: str) -> dict[str, npt.NDArray[np.float64] | list[str]]:
+        """Return a dictionary with node data by name."""
+        index = self.get_node_index(name)
+        if index is not None:
+            return {
+                "name": name,
+                "index": index,
+                "coords": self.coords[index],
+                "children": self.get_children(name),
+            }
+        return {}
