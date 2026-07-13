@@ -14,7 +14,7 @@ np.random.seed(3)
 
 
 def load_graph_data() -> dict[str, list[str]]:
-    """Load graph data in adjacency list formatfrom a YAML file."""
+    """Load graph data in adjacency list format from a YAML file."""
     with open("src/graph.yaml") as file:
         graph_yaml = yaml.safe_load(file)
     # Flatten into a single dict, empty list if no children
@@ -27,8 +27,8 @@ def load_graph_data() -> dict[str, list[str]]:
 class Node(NamedTuple):
     name: str
     index_nbr: int
-    x: int
-    y: int
+    x: float
+    y: float
     children: list[str]
 
 
@@ -51,8 +51,8 @@ class Graph:
         Initialize graph based on dictionary
 
         args:
-            fig: Matplotlib figure object, optional
-            ax: Matplotlib axes object, optional
+            fig: Matplotlib figure object
+            ax: Matplotlib axes object
             graph: dictionary with graph data, adjacency list format
             axis_lim: tuple of axis limits used for plot creation and node spawning
             spawn_margin: subtracted from axis limits to nodes don't spawn on the edge
@@ -62,7 +62,7 @@ class Graph:
         self.index: dict[str, int] = {name: i for i, name in enumerate(graph.keys())}
 
         # Edges
-        self._edges: np.ndarray[tuple[int, ...]] = np.array(
+        self._edges: npt.NDArray[np.int32] = np.array(
             [
                 (self.index[node_start], self.index[node_end])
                 for node_start, neighbours in graph.items()
@@ -148,7 +148,7 @@ class Graph:
         return children if children is not None else []
 
     def get_node(self, name: str) -> Node | None:
-        """Return a dictionary with node data by name."""
+        """Return a Node tuple with data by name."""
         index: int | None = self.get_node_index(name)
         if index is not None:
             node_coords: npt.NDArray[np.float64] = self.coords[index]
@@ -156,19 +156,19 @@ class Graph:
             return Node(
                 name=name,
                 index_nbr=index,
-                x=int(node_coords[0]),
-                y=int(node_coords[1]),
+                x=float(node_coords[0]),
+                y=float(node_coords[1]),
                 children=children,
             )
         return None
 
     def move_node(self, name: str, new_coords: npt.ArrayLike) -> Node | None:
-        """Move a single node to new coordinates."""
+        """Move a single node to new coordinates and return the updated node."""
         new_coords = np.asarray(new_coords, dtype=np.float64)
-        node: Node | None = self.get_node(name)
-        if node is not None:
-            self.coords[node.index_nbr] = new_coords
-            self._scatter.set_offsets(self.coords)
-            self._edge_lines.set_segments(self.coords[self.edges])
-            return node
-        return None
+        node_index: int | None = self.get_node_index(name)
+        if node_index is None:
+            return None
+        updated_coords = self.coords.copy()
+        updated_coords[node_index] = new_coords
+        self.coords = updated_coords
+        return self.get_node(name)

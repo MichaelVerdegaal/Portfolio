@@ -12,7 +12,7 @@ TARGET_FPS = 60
 DURATION_SECONDS: int = 5  # Animation duration in seconds
 INTERVAL_MS: int = 1000 // TARGET_FPS  # Animation interval in milliseconds
 FRAMES = int(DURATION_SECONDS * TARGET_FPS)  # Total number of frames in the animation
-SAVE_PATH: str | None = "animation.gif"  # e.g. "animation.gif", None = show only
+SAVE_PATH: str | None = "animation.mp4"  # e.g. "animation.gif", None = show only
 print(f"{TARGET_FPS=}, {DURATION_SECONDS=}, {INTERVAL_MS=}, {FRAMES=}")
 
 # Load data from YAML
@@ -54,16 +54,30 @@ def step_history(
 fig, ax = create_figure()
 G: Graph = Graph(fig=fig, ax=ax, graph=graph_dict)
 
+
 # --- Layout --------------------------------------------------------------------
-root_node: Node | None = G.get_node("A")
-root_node = G.move_node("A", np.array([50, 75]))
+def layout_children(parent_name: str, visited: set[str]) -> None:
+    """Recursively move children that are above their parent to parent_y - 5."""
+    if parent_name in visited:
+        return
+    visited.add(parent_name)
+
+    parent_coords = G.get_node_coords(parent_name)
+    if parent_coords is None:
+        return
+
+    parent_y = float(parent_coords[1])
+    for child in G.get_children(parent_name):
+        child_coords = G.get_node_coords(child)
+        if child_coords is None:
+            continue
+        G.move_node(child, np.array([child_coords[0], parent_y - 10]))
+        layout_children(child, visited)
+
+
+root_node: Node | None = G.move_node("A", np.array([50, 75]))
 if root_node is not None:
-    for child in root_node.children:
-        child_node: Node | None = G.get_node(child)
-        if child_node is not None:
-            if child_node.y > root_node.y:
-                new_y = root_node.y - 5
-                _ = G.move_node(child, np.array([child_node.x, new_y]))
+    layout_children("A", set())
 
 # --- Animate --------------------------------------------------------------------
 start_layout = G._coords_original
@@ -84,9 +98,8 @@ def animate(frame: int):
 
 
 anim = FuncAnimation(
-    fig, func=animate, interval=INTERVAL_MS, frames=FRAMES, repeat=True
+    fig, func=animate, interval=INTERVAL_MS, frames=FRAMES, repeat=False
 )
-# if SAVE_PATH:
-# anim.save(SAVE_PATH, writer="pillow", fps=TARGET_FPS)
-# fig.tight_layout()
+if SAVE_PATH:
+    anim.save(SAVE_PATH, writer="ffmpeg", fps=TARGET_FPS)
 plt.show()
