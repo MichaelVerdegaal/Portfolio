@@ -5,7 +5,7 @@ import numpy as np
 import numpy.typing as npt
 from matplotlib.animation import FuncAnimation
 
-from src.graph import Graph, GraphScene, load_graph_data
+from src.graph import Graph, load_graph_data
 from src.mpl_utils import create_figure
 
 # Config animation
@@ -56,14 +56,13 @@ def step_history(
 
 # --- Main ----------------------------------------------------------------------
 fig, ax = create_figure()
-G: Graph = Graph(graph_dict)
-GScene: GraphScene = GraphScene(G, fig, ax)
+G: Graph = Graph(fig=fig, ax=ax, graph=graph_dict)
 
-target_len: np.float64 = GScene.edge_lengths.mean()
+target_len: np.float64 = G.edge_lengths.mean()
 final_layout: npt.NDArray[np.float64] = np.random.uniform(
-    low=0, high=80, size=(len(GScene.graph.node_names), 2)
+    low=0, high=80, size=(len(G.node_names), 2)
 )
-history = tween_history(GScene.coords, final_layout, FRAMES)
+history = tween_history(G.coords, final_layout, FRAMES)
 
 
 def animate(frame: int):
@@ -73,14 +72,15 @@ def animate(frame: int):
     new_coords = history[frame]
 
     # update scene
-    GScene.coords = new_coords
-    return GScene._scatter, GScene._edge_lines
+    G.coords = new_coords
+
+    return G.get_artists()
 
 
 anim = FuncAnimation(
     fig, func=animate, interval=INTERVAL_MS, frames=FRAMES, repeat=True
 )
-fig.tight_layout()
-if SAVE_PATH:
-    anim.save(SAVE_PATH, writer="pillow", fps=TARGET_FPS)
+# if SAVE_PATH:
+# anim.save(SAVE_PATH, writer="pillow", fps=TARGET_FPS)
+# fig.tight_layout()
 plt.show()

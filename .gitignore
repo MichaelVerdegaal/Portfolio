@@ -22,3 +22,7 @@ compose.yaml
 
 # Ignore pyscript stubs
 pyscript-stubs/**
+
+# Written gifs/videos
+*.gif
+*.mp4
