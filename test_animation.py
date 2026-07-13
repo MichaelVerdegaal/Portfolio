@@ -2,10 +2,9 @@ from collections.abc import Callable
 
 import matplotlib.pyplot as plt
 import numpy as np
-import numpy.typing as npt
 from matplotlib.animation import FuncAnimation
 
-from src.graph import Graph, load_graph_data
+from src.graph import Graph, Node, load_graph_data
 from src.mpl_utils import create_figure
 
 # Config animation
@@ -51,18 +50,25 @@ def step_history(
     return history
 
 
-# --- Layout --------------------------------------------------------------------
-
-
 # --- Main ----------------------------------------------------------------------
 fig, ax = create_figure()
 G: Graph = Graph(fig=fig, ax=ax, graph=graph_dict)
 
-target_len: np.float64 = G.edge_lengths.mean()
-final_layout: npt.NDArray[np.float64] = np.random.uniform(
-    low=0, high=80, size=(len(G.node_names), 2)
-)
-history = tween_history(G.coords, final_layout, FRAMES)
+# --- Layout --------------------------------------------------------------------
+root_node: Node | None = G.get_node("A")
+root_node = G.move_node("A", np.array([50, 75]))
+if root_node is not None:
+    for child in root_node.children:
+        child_node: Node | None = G.get_node(child)
+        if child_node is not None:
+            if child_node.y > root_node.y:
+                new_y = root_node.y - 5
+                _ = G.move_node(child, np.array([child_node.x, new_y]))
+
+# --- Animate --------------------------------------------------------------------
+start_layout = G._coords_original
+final_layout = G._coords.copy()
+history = tween_history(start_layout, final_layout, FRAMES)
 
 
 def animate(frame: int):

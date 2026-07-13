@@ -1,3 +1,5 @@
+from typing import NamedTuple
+
 import numpy as np
 import numpy.typing as npt
 import yaml
@@ -20,6 +22,14 @@ def load_graph_data() -> dict[str, list[str]]:
     for node in graph_yaml:
         graph.update(node if isinstance(node, dict) else {node: []})
     return graph
+
+
+class Node(NamedTuple):
+    name: str
+    index_nbr: int
+    x: int
+    y: int
+    children: list[str]
 
 
 class Graph:
@@ -67,6 +77,7 @@ class Graph:
             high=axis_lim[1] - spawn_margin,
             size=(len(self._graph), 2),
         )
+        self._coords_original: npt.NDArray[np.float64] = self._coords.copy()
 
         # Matplotlib, Create nodes with PathCollection and edges with LineCollection
         self.fig: Figure = fig
@@ -113,7 +124,9 @@ class Graph:
 
     @property
     def edge_lengths(self) -> npt.NDArray[np.float64]:
-        d = self.coords[self.edges_end] - self.coords[self.edges_start]
+        d: npt.NDArray[np.float64] = (
+            self.coords[self.edges_end] - self.coords[self.edges_start]
+        )
         return np.hypot(d[:, 0], d[:, 1])
 
     def get_artists(self) -> tuple[PathCollection, LineCollection]:
@@ -134,14 +147,28 @@ class Graph:
         children = self._graph.get(name, None)
         return children if children is not None else []
 
-    def get_node(self, name: str) -> dict[str, npt.NDArray[np.float64] | list[str]]:
+    def get_node(self, name: str) -> Node | None:
         """Return a dictionary with node data by name."""
-        index = self.get_node_index(name)
+        index: int | None = self.get_node_index(name)
         if index is not None:
-            return {
-                "name": name,
-                "index": index,
-                "coords": self.coords[index],
-                "children": self.get_children(name),
-            }
-        return {}
+            node_coords: npt.NDArray[np.float64] = self.coords[index]
+            children = self.get_children(name)
+            return Node(
+                name=name,
+                index_nbr=index,
+                x=int(node_coords[0]),
+                y=int(node_coords[1]),
+                children=children,
+            )
+        return None
+
+    def move_node(self, name: str, new_coords: npt.ArrayLike) -> Node | None:
+        """Move a single node to new coordinates."""
+        new_coords = np.asarray(new_coords, dtype=np.float64)
+        node: Node | None = self.get_node(name)
+        if node is not None:
+            self.coords[node.index_nbr] = new_coords
+            self._scatter.set_offsets(self.coords)
+            self._edge_lines.set_segments(self.coords[self.edges])
+            return node
+        return None
