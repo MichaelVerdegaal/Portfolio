@@ -23,7 +23,7 @@ TARGET_FPS = 60
 DURATION_SECONDS: int = 5  # Animation duration in seconds
 INTERVAL_MS: int  = 1000 // TARGET_FPS  # Animation interval in milliseconds
 FRAMES = int(DURATION_SECONDS * TARGET_FPS)  # Total number of frames in the animation
-SAVE_PATH: str | None = None  # e.g. "animation.gif", None = show only
+SAVE_PATH: str | None = "animation.gif"  # e.g. "animation.gif", None = show only
 print(f"{TARGET_FPS=}, {DURATION_SECONDS=}, {INTERVAL_MS=}, {FRAMES=}")
 
 # Load data from YAML
@@ -94,6 +94,9 @@ class Graph:
     def edge_lengths(self) -> npt.NDArray[np.float64]:
         d = self.coords[self.edges_end] - self.coords[self.edges_start]
         return np.hypot(d[:, 0], d[:, 1])
+
+    def get_node_index(self, name: str) -> int | None:
+        return self.index.get(name, None)
 
 
 class GraphScene:
@@ -178,6 +181,9 @@ def step_history(
         pos = pos + step_fn(pos)
     return history
 
+# --- Layout --------------------------------------------------------------------
+
+
 
 # --- Main ----------------------------------------------------------------------
 fig, ax = create_figure(bg_color=COLOR_BG)
@@ -204,4 +210,6 @@ def animate(frame: int):
 
 anim = FuncAnimation(fig, func=animate, interval=INTERVAL_MS, frames=FRAMES, repeat=True)
 fig.tight_layout()
+if SAVE_PATH:
+    anim.save(SAVE_PATH, writer="pillow", fps=TARGET_FPS)
 plt.show()
