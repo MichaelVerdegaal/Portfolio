@@ -1,5 +1,8 @@
-from typing import NamedTuple
+from __future__ import annotations
 
+from collections.abc import Iterable
+
+import networkx as nx
 import numpy as np
 import numpy.typing as npt
 import yaml
@@ -9,166 +12,95 @@ from matplotlib.figure import Figure
 
 from src.mpl_utils import COLOR_EDGES, COLOR_NODES
 
-# Set randomness
-np.random.seed(3)
+
+NodeName = str
+GraphAttr = dict[str, object]
+NodeAttr = dict[str, object]
 
 
-def load_graph_data() -> dict[str, list[str]]:
-    """Load graph data in adjacency list format from a YAML file."""
+def load_graph_data() -> nx.DiGraph[NodeName, NodeAttr, GraphAttr]:
+    """Load an adjacency-list graph from YAML, preserving parent -> child direction.
+
+    Each YAML entry is either a bare node name or a {name: [children]} mapping.
+    """
     with open("src/graph.yaml") as file:
-        graph_yaml = yaml.safe_load(file)
-    # Flatten into a single dict, empty list if no children
-    graph = {}
-    for node in graph_yaml:
-        graph.update(node if isinstance(node, dict) else {node: []})
-    return graph
+        entries: list[str | dict[str, list[str]]] = yaml.safe_load(file)
+    adjacency: dict[str, Iterable[str]] = {}
+    for entry in entries:
+        if isinstance(entry, dict):
+            adjacency.update(entry)
+        else:
+            adjacency[entry] = []
+    return nx.from_dict_of_lists(adjacency, create_using=nx.DiGraph)
 
 
-class Node(NamedTuple):
-    name: str
-    index_nbr: int
-    x: float
-    y: float
-    children: list[str]
 
-
-class Graph:
-    """
-    Main class for managing graph data, including nodes, edges, and their coordinates.
-
-    Coordinates are initialized randomly within the limits of XLIM & YLIM
-    """
-
+class GraphView:
     def __init__(
         self,
         fig: Figure,
         ax: Axes,
-        graph: dict[str, list[str]],
+        graph: nx.DiGraph[NodeName, NodeAttr, GraphAttr],
         axis_lim: tuple[int, int] = (0, 100),
         spawn_margin: int = 20,
-    ):
+        rng: np.random.Generator | None = None,
+    ) -> None:
+        """Renders a NetworkX graph as matplotlib node/edge collections.
+
+        Topology lives in `self.graph`; query it directly (self.graph.successors(n),
+        self.graph.degree, nx.shortest_path(...)). Geometry lives in `self._pos`,
+        kept in node order, which drives the two collections during animation.
         """
-        Initialize graph based on dictionary
-
-        args:
-            fig: Matplotlib figure object
-            ax: Matplotlib axes object
-            graph: dictionary with graph data, adjacency list format
-            axis_lim: tuple of axis limits used for plot creation and node spawning
-            spawn_margin: subtracted from axis limits to nodes don't spawn on the edge
-        """
-        # Nodes
-        self._graph: dict[str, list[str]] = graph
-        self.index: dict[str, int] = {name: i for i, name in enumerate(graph.keys())}
-
-        # Edges
-        self._edges: npt.NDArray[np.int32] = np.array(
-            [
-                (self.index[node_start], self.index[node_end])
-                for node_start, neighbours in graph.items()
-                for node_end in neighbours
-            ],
-            dtype=np.int32,
-        )
-
-        # Node coordinates
-        self._coords: npt.NDArray[np.float64] = np.random.uniform(
-            low=axis_lim[0] + spawn_margin,
-            high=axis_lim[1] - spawn_margin,
-            size=(len(self._graph), 2),
-        )
-        self._coords_original: npt.NDArray[np.float64] = self._coords.copy()
-
-        # Matplotlib, Create nodes with PathCollection and edges with LineCollection
         self.fig: Figure = fig
         self.ax: Axes = ax
+        self.graph: nx.DiGraph[NodeName, NodeAttr, GraphAttr] = graph
+        self.index: dict[str, int] = {name: i for i, name in enumerate(graph)}
+
+        self._edges: npt.NDArray[np.int32] = np.array(
+            [(self.index[u], self.index[v]) for u, v in graph.edges()],
+            dtype=np.int32,
+        ).reshape(-1, 2)
+
+        rng = rng if rng is not None else np.random.default_rng(3)
+        low, high = axis_lim[0] + spawn_margin, axis_lim[1] - spawn_margin
+        self._pos: npt.NDArray[np.float64] = rng.uniform(
+            low, high, size=(graph.number_of_nodes(), 2)
+        )
 
         self._scatter: PathCollection = ax.scatter(
-            self.coords_x, self.coords_y, color=COLOR_NODES, zorder=2
+            self._pos[:, 0], self._pos[:, 1], color=COLOR_NODES, zorder=2
         )
         self._edge_lines: LineCollection = LineCollection(
-            [], color=COLOR_EDGES, linewidths=1, zorder=1
+            self._pos[self._edges], color=COLOR_EDGES, linewidths=1, zorder=1
         )
         _ = ax.add_collection(self._edge_lines)
-        self._edge_lines.set_segments(self.coords[self.edges])
 
     @property
-    def coords(self) -> npt.NDArray[np.float64]:
-        return self._coords
+    def pos(self) -> npt.NDArray[np.float64]:
+        return self._pos
 
-    @coords.setter
-    def coords(self, new_coords: npt.NDArray[np.float64]) -> None:
-        self._coords = new_coords
-        self._scatter.set_offsets(new_coords)
-        self._edge_lines.set_segments(new_coords[self.edges])
-
-    @property
-    def coords_x(self) -> npt.NDArray[np.float64]:
-        return self.coords[:, 0]
-
-    @property
-    def coords_y(self) -> npt.NDArray[np.float64]:
-        return self.coords[:, 1]
-
-    @property
-    def edges(self) -> npt.NDArray[np.int32]:
-        return self._edges
-
-    @property
-    def edges_start(self) -> npt.NDArray[np.int32]:
-        return self.edges[:, 0]
-
-    @property
-    def edges_end(self) -> npt.NDArray[np.int32]:
-        return self.edges[:, 1]
+    @pos.setter
+    def pos(self, new_pos: npt.NDArray[np.float64]) -> None:
+        self._pos = new_pos
+        self._scatter.set_offsets(new_pos)
+        self._edge_lines.set_segments(new_pos[self._edges])
 
     @property
     def edge_lengths(self) -> npt.NDArray[np.float64]:
-        d: npt.NDArray[np.float64] = (
-            self.coords[self.edges_end] - self.coords[self.edges_start]
-        )
-        return np.hypot(d[:, 0], d[:, 1])
+        delta = self._pos[self._edges[:, 1]] - self._pos[self._edges[:, 0]]
+        return np.hypot(delta[:, 0], delta[:, 1])
 
     def get_artists(self) -> tuple[PathCollection, LineCollection]:
         return self._scatter, self._edge_lines
 
-    def get_node_index(self, name: str) -> int | None:
-        return self.index.get(name, None)
+    def move_node(self, name: str, new_coords: npt.ArrayLike) -> None:
+        self._pos[self.index[name]] = new_coords
+        self._scatter.set_offsets(self._pos)
+        self._edge_lines.set_segments(self._pos[self._edges])
 
     def get_node_coords(self, name: str) -> npt.NDArray[np.float64] | None:
         """Return the X-Y coordinates of a node by name."""
-        index = self.get_node_index(name)
+        index = self.index.get(name)
         if index is not None:
-            return self.coords[index]
+            return self._pos[index]
         return None
-
-    def get_children(self, name: str) -> list[str]:
-        """Return the children of a node by name."""
-        children = self._graph.get(name, None)
-        return children if children is not None else []
-
-    def get_node(self, name: str) -> Node | None:
-        """Return a Node tuple with data by name."""
-        index: int | None = self.get_node_index(name)
-        if index is not None:
-            node_coords: npt.NDArray[np.float64] = self.coords[index]
-            children = self.get_children(name)
-            return Node(
-                name=name,
-                index_nbr=index,
-                x=float(node_coords[0]),
-                y=float(node_coords[1]),
-                children=children,
-            )
-        return None
-
-    def move_node(self, name: str, new_coords: npt.ArrayLike) -> Node | None:
-        """Move a single node to new coordinates and return the updated node."""
-        new_coords = np.asarray(new_coords, dtype=np.float64)
-        node_index: int | None = self.get_node_index(name)
-        if node_index is None:
-            return None
-        updated_coords = self.coords.copy()
-        updated_coords[node_index] = new_coords
-        self.coords = updated_coords
-        return self.get_node(name)

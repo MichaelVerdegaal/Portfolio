@@ -1,10 +1,11 @@
 from collections.abc import Callable
 
 import matplotlib.pyplot as plt
+import networkx as nx
 import numpy as np
 from matplotlib.animation import FuncAnimation
 
-from src.graph import Graph, Node, load_graph_data
+from src.graph import GraphView, load_graph_data, NodeName, NodeAttr, GraphAttr
 from src.mpl_utils import create_figure
 
 # Config animation
@@ -16,7 +17,7 @@ SAVE_PATH: str | None = "animation.mp4"  # e.g. "animation.gif", None = show onl
 print(f"{TARGET_FPS=}, {DURATION_SECONDS=}, {INTERVAL_MS=}, {FRAMES=}")
 
 # Load data from YAML
-graph_dict: dict[str, list[str]] = load_graph_data()
+graph: nx.DiGraph[NodeName, NodeAttr, GraphAttr] = load_graph_data()
 
 
 # --- History builders: every mode ends as a (frames, N, 2) array ---------------
@@ -52,8 +53,8 @@ def step_history(
 
 # --- Main ----------------------------------------------------------------------
 fig, ax = create_figure()
-G: Graph = Graph(fig=fig, ax=ax, graph=graph_dict)
-
+G: GraphView = GraphView(fig=fig, ax=ax, graph=graph)
+start_layout = G.pos.copy()
 
 # --- Layout --------------------------------------------------------------------
 def layout_children(parent_name: str, visited: set[str]) -> None:
@@ -67,21 +68,19 @@ def layout_children(parent_name: str, visited: set[str]) -> None:
         return
 
     parent_y = float(parent_coords[1])
-    for child in G.get_children(parent_name):
+    for child in G.graph.successors(parent_name):
         child_coords = G.get_node_coords(child)
         if child_coords is None:
             continue
-        G.move_node(child, np.array([child_coords[0], parent_y - 10]))
+        G.move_node(child, (float(child_coords[0]), parent_y - 10))
         layout_children(child, visited)
 
 
-root_node: Node | None = G.move_node("A", np.array([50, 75]))
-if root_node is not None:
-    layout_children("A", set())
+G.move_node("A", (50, 75))
+layout_children("A", set())
 
 # --- Animate --------------------------------------------------------------------
-start_layout = G._coords_original
-final_layout = G._coords.copy()
+final_layout = G.pos.copy()
 history = tween_history(start_layout, final_layout, FRAMES)
 
 
@@ -92,14 +91,14 @@ def animate(frame: int):
     new_coords = history[frame]
 
     # update scene
-    G.coords = new_coords
+    G.pos = new_coords
 
     return G.get_artists()
 
 
 anim = FuncAnimation(
-    fig, func=animate, interval=INTERVAL_MS, frames=FRAMES, repeat=False
+    fig, func=animate, interval=INTERVAL_MS, frames=FRAMES, repeat=True
 )
-if SAVE_PATH:
-    anim.save(SAVE_PATH, writer="ffmpeg", fps=TARGET_FPS)
+# if SAVE_PATH:
+    # anim.save(SAVE_PATH, writer="ffmpeg", fps=TARGET_FPS)
 plt.show()
