@@ -1,40 +1,23 @@
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 from matplotlib.animation import FuncAnimation
 
-from src.graph import GraphAttr, GraphView, NodeAttr, NodeName, load_graph_data
+from src.graph import GraphView, load_graph_data
 from src.mpl_utils import create_figure
 
-# Config animation
 TARGET_FPS = 60
-DURATION_SECONDS: int = 5  # Animation duration in seconds
-INTERVAL_MS: int = 1000 // TARGET_FPS  # Animation interval in milliseconds
-FRAMES = int(DURATION_SECONDS * TARGET_FPS)  # Total number of frames in the animation
-SAVE_PATH: str | None = "animation.mp4"  # e.g. "animation.gif", None = show only
-print(f"{TARGET_FPS=}, {DURATION_SECONDS=}, {INTERVAL_MS=}, {FRAMES=}")
-
-# Load data from YAML
-graph: nx.DiGraph[NodeName, NodeAttr, GraphAttr] = load_graph_data()
+DURATION_SECONDS = 5
+INTERVAL_MS = 1000 // TARGET_FPS
+FRAMES = int(DURATION_SECONDS * TARGET_FPS)
 
 
-# --- History builders: every mode ends as a (frames, N, 2) array ---------------
+# --- History builders: every mode ends as a (frames, N, 2) array ----------------------
 def ease_bezier(t: float) -> float:
     """Cubic bezier easing function for smooth transition"""
     return t * t * (3 - 2 * t)
-
-
-def tween_history(
-    start: np.ndarray,
-    target: np.ndarray,
-    frames: int,
-    ease: Callable[[float], float] = ease_bezier,
-) -> np.ndarray:
-    """One-shot: interpolate from start to a precomputed target layout."""
-    t = np.array([ease(i / (frames - 1)) for i in range(frames)])
-    return start + (target - start) * t[:, None, None]
 
 
 def step_history(
@@ -51,48 +34,47 @@ def step_history(
     return history
 
 
-# --- Main ----------------------------------------------------------------------
+def tween_history(
+    start: np.ndarray,
+    target: np.ndarray,
+    frames: int,
+    ease: Callable[[float], float] = ease_bezier,
+) -> np.ndarray:
+    """One-shot: interpolate from start to a precomputed target layout."""
+    t = np.array([ease(i / (frames - 1)) for i in range(frames)])
+    return start + (target - start) * t[:, None, None]
+
+
+# --- Layout ---------------------------------------------------------------------------
+def layout_by_depth(
+    view: GraphView, root: int, top: float = 75.0, dy: float = 10.0
+) -> None:
+    """Set each node's y from its BFS depth below root; x is left untouched."""
+    for depth, layer in enumerate(nx.bfs_layers(view.graph, root)):
+        view._pos[list(layer), 1] = top - depth * dy
+    view.refresh()
+
+
+# --- Initialize graph -----------------------------------------------------------------
 fig, ax = create_figure()
-G: GraphView = GraphView(fig=fig, ax=ax, graph=graph)
+graph_data: dict[str, Iterable[str]] = load_graph_data()
+G = GraphView(fig, ax, nx.DiGraph(graph_data), axis_lim=(0, 100), spawn_margin=20)
 start_layout = G.pos.copy()
 
+# --- Main  ----------------------------------------------------------------------------
 
-# --- Layout --------------------------------------------------------------------
-def layout_children(parent_name: str, visited: set[str]) -> None:
-    """Recursively move children that are above their parent to parent_y - 5."""
-    if parent_name in visited:
-        return
-    visited.add(parent_name)
+# root is A, which relabels to node 0; find it structurally to be safe
+root_node = next(n for n in G.graph if G.graph.in_degree(n) == 0)
+G.move_node(root_node, (50, 75))  # place root at top center
+layout_by_depth(G, root_node)
 
-    parent_coords = G.get_node_coords(parent_name)
-    if parent_coords is None:
-        return
-
-    parent_y = float(parent_coords[1])
-    for child in G.graph.successors(parent_name):
-        child_coords = G.get_node_coords(child)
-        if child_coords is None:
-            continue
-        G.move_node(child, (float(child_coords[0]), parent_y - 10))
-        layout_children(child, visited)
-
-
-G.move_node("A", (50, 75))
-layout_children("A", set())
-
-# --- Animate --------------------------------------------------------------------
 final_layout = G.pos.copy()
 history = tween_history(start_layout, final_layout, FRAMES)
 
 
 def animate(frame: int):
-    # coords = GScene.coords
-
-    # transform
-    new_coords = history[frame]
-
-    # update scene
-    G.pos = new_coords
+    """Main animation function for FuncAnimation; called once per frame."""
+    G.pos = history[frame]  # setter calls refresh()
 
     return G.get_artists()
 
@@ -100,6 +82,4 @@ def animate(frame: int):
 anim = FuncAnimation(
     fig, func=animate, interval=INTERVAL_MS, frames=FRAMES, repeat=True
 )
-# if SAVE_PATH:
-# anim.save(SAVE_PATH, writer="ffmpeg", fps=TARGET_FPS)
 plt.show()

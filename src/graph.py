@@ -17,7 +17,7 @@ GraphAttr = dict[str, object]
 NodeAttr = dict[str, object]
 
 
-def load_graph_data() -> nx.DiGraph[NodeName, NodeAttr, GraphAttr]:
+def load_graph_data() -> dict[str, Iterable[str]]:
     """Load an adjacency-list graph from YAML, preserving parent -> child direction.
 
     Each YAML entry is either a bare node name or a {name: [children]} mapping.
@@ -30,48 +30,52 @@ def load_graph_data() -> nx.DiGraph[NodeName, NodeAttr, GraphAttr]:
             adjacency.update(entry)
         else:
             adjacency[entry] = []
-    return nx.from_dict_of_lists(adjacency, create_using=nx.DiGraph)
+    return adjacency
 
 
 class GraphView:
+    """Renders a fixed-topology DiGraph whose nodes are integers 0..N-1.
+
+    Node id == row in the position array, so geometry (self._pos) and topology
+    (self.graph) stay aligned by construction, with no separate index map.
+    """
+
     def __init__(
         self,
         fig: Figure,
         ax: Axes,
-        graph: nx.DiGraph[NodeName, NodeAttr, GraphAttr],
+        graph: nx.DiGraph,
+        *,
         axis_lim: tuple[int, int] = (0, 100),
         spawn_margin: int = 20,
         rng: np.random.Generator | None = None,
     ) -> None:
-        """Renders a NetworkX graph as matplotlib node/edge collections.
-
-        Topology lives in `self.graph`; query it directly (self.graph.successors(n),
-        self.graph.degree, nx.shortest_path(...)). Geometry lives in `self._pos`,
-        kept in node order, which drives the two collections during animation.
-        """
         self.fig: Figure = fig
         self.ax: Axes = ax
-        self.graph: nx.DiGraph[NodeName, NodeAttr, GraphAttr] = graph
-        self.index: dict[str, int] = {name: i for i, name in enumerate(graph)}
-
-        self._edges: npt.NDArray[np.int32] = np.array(
-            [(self.index[u], self.index[v]) for u, v in graph.edges()],
-            dtype=np.int32,
-        ).reshape(-1, 2)
-
-        rng = rng if rng is not None else np.random.default_rng(3)
-        low, high = axis_lim[0] + spawn_margin, axis_lim[1] - spawn_margin
-        self._pos: npt.NDArray[np.float64] = rng.uniform(
-            low, high, size=(graph.number_of_nodes(), 2)
+        # Set labels of the nodes to integer to support rapid indexing
+        self.graph: nx.DiGraph = nx.convert_node_labels_to_integers(
+            graph, label_attribute="name"
         )
 
+        # node id is the row, so edges are already index pairs
+        self._edge_idx: npt.NDArray[np.int32] = np.array(
+            list(self.graph.edges), dtype=np.int32
+        ).reshape(-1, 2)
+
+        # Initialize random coordinates for each node
+        rng = rng or np.random.default_rng(3)
+        low, high = axis_lim[0] + spawn_margin, axis_lim[1] - spawn_margin
+        n: int = self.graph.number_of_nodes()
+        self._pos = rng.uniform(low, high, size=(n, 2))
+
+        # Create Matplotlib objects for nodes and edges
         self._scatter: PathCollection = ax.scatter(
             self._pos[:, 0], self._pos[:, 1], color=COLOR_NODES, zorder=2
         )
         self._edge_lines: LineCollection = LineCollection(
-            self._pos[self._edges], color=COLOR_EDGES, linewidths=1, zorder=1
+            self._pos[self._edge_idx], color=COLOR_EDGES, linewidths=1, zorder=1
         )
-        _ = ax.add_collection(self._edge_lines)
+        _ = self.ax.add_collection(self._edge_lines)
 
     @property
     def pos(self) -> npt.NDArray[np.float64]:
@@ -80,25 +84,22 @@ class GraphView:
     @pos.setter
     def pos(self, new_pos: npt.NDArray[np.float64]) -> None:
         self._pos = new_pos
-        self._scatter.set_offsets(new_pos)
-        self._edge_lines.set_segments(new_pos[self._edges])
+        self.refresh()
 
-    @property
-    def edge_lengths(self) -> npt.NDArray[np.float64]:
-        delta = self._pos[self._edges[:, 1]] - self._pos[self._edges[:, 0]]
-        return np.hypot(delta[:, 0], delta[:, 1])
+    def refresh(self) -> None:
+        """Push the current array to the collections. Call after in-place edits."""
+        self._scatter.set_offsets(self._pos)
+        self._edge_lines.set_segments(self._pos[self._edge_idx])
+
+    def move_node(self, node: int, xy: npt.ArrayLike) -> None:
+        self._pos[node] = xy
+
+    def get_node_coords(self, node: int) -> npt.NDArray[np.float64]:
+        return self._pos[node]
+
+    def sync_to_graph(self) -> None:
+        """Write the array back into node 'pos' attributes. Deliberate, not per-frame."""
+        nx.set_node_attributes(self.graph, {n: self._pos[n] for n in self.graph}, "pos")
 
     def get_artists(self) -> tuple[PathCollection, LineCollection]:
         return self._scatter, self._edge_lines
-
-    def move_node(self, name: str, new_coords: npt.ArrayLike) -> None:
-        self._pos[self.index[name]] = new_coords
-        self._scatter.set_offsets(self._pos)
-        self._edge_lines.set_segments(self._pos[self._edges])
-
-    def get_node_coords(self, name: str) -> npt.NDArray[np.float64] | None:
-        """Return the X-Y coordinates of a node by name."""
-        index = self.index.get(name)
-        if index is not None:
-            return self._pos[index]
-        return None
