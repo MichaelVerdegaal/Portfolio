@@ -12,7 +12,6 @@ from matplotlib.figure import Figure
 
 from src.mpl_utils import COLOR_EDGES, COLOR_NODES
 
-
 NodeName = str
 GraphAttr = dict[str, object]
 NodeAttr = dict[str, object]
@@ -32,7 +31,6 @@ def load_graph_data() -> nx.DiGraph[NodeName, NodeAttr, GraphAttr]:
         else:
             adjacency[entry] = []
     return nx.from_dict_of_lists(adjacency, create_using=nx.DiGraph)
-
 
 
 class GraphView:

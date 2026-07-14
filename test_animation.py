@@ -5,7 +5,7 @@ import networkx as nx
 import numpy as np
 from matplotlib.animation import FuncAnimation
 
-from src.graph import GraphView, load_graph_data, NodeName, NodeAttr, GraphAttr
+from src.graph import GraphAttr, GraphView, NodeAttr, NodeName, load_graph_data
 from src.mpl_utils import create_figure
 
 # Config animation
@@ -56,6 +56,7 @@ fig, ax = create_figure()
 G: GraphView = GraphView(fig=fig, ax=ax, graph=graph)
 start_layout = G.pos.copy()
 
+
 # --- Layout --------------------------------------------------------------------
 def layout_children(parent_name: str, visited: set[str]) -> None:
     """Recursively move children that are above their parent to parent_y - 5."""
@@ -100,5 +101,5 @@ anim = FuncAnimation(
     fig, func=animate, interval=INTERVAL_MS, frames=FRAMES, repeat=True
 )
 # if SAVE_PATH:
-    # anim.save(SAVE_PATH, writer="ffmpeg", fps=TARGET_FPS)
+# anim.save(SAVE_PATH, writer="ffmpeg", fps=TARGET_FPS)
 plt.show()
