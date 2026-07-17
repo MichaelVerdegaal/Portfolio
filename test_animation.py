@@ -81,8 +81,9 @@ def tween_history(
 
 
 # --- Layout ---------------------------------------------------------------------------
-def layout_by_depth(
-    view: GraphView, root: int, top: float = 75.0, dy: float = 10.0
+
+def layout_func(
+    view: GraphView, root: int, top: float = 75, dy: float = 10, dx: float = 10
 ) -> None:
     """Arrange nodes vertically by BFS depth below the root.
 
@@ -94,10 +95,35 @@ def layout_by_depth(
         root: The integer id of the root node.
         top: The y coordinate of the root layer.
         dy: Vertical spacing between successive layers.
+        dx: Horizontal spacing between nodes within the same layer.
     """
-    for depth, layer in enumerate(nx.bfs_layers(view.graph, root)):
-        view._pos[list(layer), 1] = top - depth * dy
+    
+    # Re-usable list of layers, each a list of node ID's
+    layers = [list(layer) for layer in nx.bfs_layers(view.graph, root)]
+
+    # First we fix the height so that no child is above their parent.
+    for depth, layer in enumerate(layers):
+        view._pos[layer, 1] = top - depth * dy
+
+    # Root keeps its order; each deeper layer is ordered by the mean x of its
+    # parents in the already-fixed layer above.
+    for layer in layers[1:]:
+        barycenter = {}
+        for node in layer:
+            parents = list(view.graph.predecessors(node))
+            barycenter[node] = (
+                np.mean([view.get_node_coords(p)[0] for p in parents])
+                if parents else view.get_node_coords(node)[0]
+            )
+        order = [n for n, _ in sorted(barycenter.items(), key=lambda kv: kv[1])]
+
+        center_x = view.get_node_coords(root)[0]  # 50.0
+
+        for i, node in enumerate(order):
+            view._pos[node, 0] = center_x + (i - (len(order) - 1) / 2) * dx
+
     view.refresh()
+
 
 
 # --- Initialize graph -----------------------------------------------------------------
@@ -111,7 +137,7 @@ start_layout = G.pos.copy()
 # root is A, which relabels to node 0; find it structurally to be safe
 root_node = next(n for n in G.graph if G.graph.in_degree(n) == 0)
 G.move_node(root_node, (50, 75))  # place root at top center
-layout_by_depth(G, root_node)
+layout_func(G, root_node)
 
 final_layout = G.pos.copy()
 history = tween_history(start_layout, final_layout, FRAMES)
