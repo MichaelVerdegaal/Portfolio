@@ -1,6 +1,5 @@
 from collections.abc import Iterable
-from numpy._typing._array_like import NDArray
-from numpy import float64
+
 import matplotlib.patheffects as pe
 import networkx as nx
 import numpy as np
@@ -10,8 +9,10 @@ from matplotlib.axes import Axes
 from matplotlib.collections import LineCollection, PathCollection
 from matplotlib.figure import Figure
 from matplotlib.text import Annotation
+from numpy import float64
+from numpy._typing._array_like import NDArray
 
-from src.mpl_utils import COLOR_EDGES, COLOR_NODES, COLOR_BG
+from src.mpl_utils import COLOR_BG, COLOR_EDGES, COLOR_NODES
 
 NodeName = str
 GraphAttr = dict[str, object]

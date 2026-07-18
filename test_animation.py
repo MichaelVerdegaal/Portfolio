@@ -1,12 +1,12 @@
 from collections.abc import Callable, Iterable
-from matplotlib.text import Annotation, Text
+
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 from matplotlib.animation import FuncAnimation
 
 from src.graph import GraphView, load_graph_data
-from src.mpl_utils import create_figure, COLOR_EDGES
+from src.mpl_utils import create_figure
 
 TARGET_FPS = 60
 DURATION_SECONDS = 5
