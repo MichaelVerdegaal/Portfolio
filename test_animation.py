@@ -246,7 +246,8 @@ def animate(frame: int):
 
 
 anim = FuncAnimation(
-    fig, func=animate, interval=INTERVAL_MS, frames=FRAMES, repeat=False
+    fig, func=animate, interval=INTERVAL_MS, frames=FRAMES, repeat=False, blit=True
 )
+
 plt.tight_layout()
 plt.show()

@@ -1,9 +1,7 @@
-from __future__ import annotations
-
 from collections.abc import Iterable
 from numpy._typing._array_like import NDArray
 from numpy import float64
-
+import matplotlib.patheffects as pe
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
@@ -13,7 +11,7 @@ from matplotlib.collections import LineCollection, PathCollection
 from matplotlib.figure import Figure
 from matplotlib.text import Annotation
 
-from src.mpl_utils import COLOR_EDGES, COLOR_NODES
+from src.mpl_utils import COLOR_EDGES, COLOR_NODES, COLOR_BG
 
 NodeName = str
 GraphAttr = dict[str, object]
@@ -91,10 +89,10 @@ class GraphView:
 
         # Create Matplotlib objects for nodes and edges
         self._scatter: PathCollection = ax.scatter(
-            self._pos[:, 0], self._pos[:, 1], color=COLOR_NODES, zorder=3
+            self._pos[:, 0], self._pos[:, 1], color=COLOR_NODES, zorder=1
         )
         self._edge_lines: LineCollection = LineCollection(
-            self._pos[self._edge_idx], color=COLOR_EDGES, linewidths=1, zorder=1
+            self._pos[self._edge_idx], color=COLOR_EDGES, linewidths=1, zorder=3
         )
         _ = self.ax.add_collection(self._edge_lines)
 
@@ -109,6 +107,7 @@ class GraphView:
                 verticalalignment="bottom",
                 color="white",
                 zorder=2,
+                path_effects=[pe.withStroke(linewidth=2.5, foreground=COLOR_BG)],
             )
             for node in self.graph
         ]
