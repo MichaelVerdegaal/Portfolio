@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from numpy._typing._array_like import NDArray
+from numpy import float64
 
 import networkx as nx
 import numpy as np
@@ -9,6 +11,7 @@ import yaml
 from matplotlib.axes import Axes
 from matplotlib.collections import LineCollection, PathCollection
 from matplotlib.figure import Figure
+from matplotlib.text import Annotation
 
 from src.mpl_utils import COLOR_EDGES, COLOR_NODES
 
@@ -84,16 +87,31 @@ class GraphView:
         rng = rng or np.random.default_rng(3)
         low, high = axis_lim[0] + spawn_margin, axis_lim[1] - spawn_margin
         n: int = self.graph.number_of_nodes()
-        self._pos = rng.uniform(low, high, size=(n, 2))
+        self._pos: NDArray[float64] = rng.uniform(low, high, size=(n, 2))
 
         # Create Matplotlib objects for nodes and edges
         self._scatter: PathCollection = ax.scatter(
-            self._pos[:, 0], self._pos[:, 1], color=COLOR_NODES, zorder=2
+            self._pos[:, 0], self._pos[:, 1], color=COLOR_NODES, zorder=3
         )
         self._edge_lines: LineCollection = LineCollection(
             self._pos[self._edge_idx], color=COLOR_EDGES, linewidths=1, zorder=1
         )
         _ = self.ax.add_collection(self._edge_lines)
+
+        # Labels above the nodes
+        self._labels: list[Annotation] = [
+            ax.annotate(
+                str(self.graph.nodes[node]["name"]),
+                xy=self._pos[node],
+                xytext=(-3, 3),
+                textcoords="offset points",
+                horizontalalignment="right",
+                verticalalignment="bottom",
+                color="white",
+                zorder=2,
+            )
+            for node in self.graph
+        ]
 
     @property
     def pos(self) -> npt.NDArray[np.float64]:
@@ -118,6 +136,8 @@ class GraphView:
         """
         self._scatter.set_offsets(self._pos)
         self._edge_lines.set_segments(self._pos[self._edge_idx])
+        for node, label in enumerate(self._labels):
+            label.xy = self._pos[node]
 
     def move_node(self, node: int, xy: npt.ArrayLike) -> None:
         """Set the position of a single node without refreshing the artists.
@@ -156,7 +176,7 @@ class GraphView:
         """Return the node and edge artists for use in animation blitting.
 
         Returns:
-            A (PathCollection, LineCollection) tuple with the node scatter
-            and the edge line collection.
+            A (PathCollection, LineCollection, Annotation...) tuple with the node scatter,
+            the edge line collection, and the node labels.
         """
-        return self._scatter, self._edge_lines
+        return (self._scatter, self._edge_lines, *self._labels)

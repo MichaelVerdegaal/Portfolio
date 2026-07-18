@@ -1,12 +1,12 @@
 from collections.abc import Callable, Iterable
-
+from matplotlib.text import Annotation, Text
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 from matplotlib.animation import FuncAnimation
 
 from src.graph import GraphView, load_graph_data
-from src.mpl_utils import create_figure
+from src.mpl_utils import create_figure, COLOR_EDGES
 
 TARGET_FPS = 60
 DURATION_SECONDS = 5
@@ -82,6 +82,7 @@ def tween_history(
 
 # --- Debugging ------------------------------------------------------------------------
 
+
 def count_crossings(above: list[int], below: list[int], graph: nx.DiGraph) -> int:
     """Count edge crossings between two adjacent layers.
 
@@ -123,9 +124,9 @@ def total_crossings(layers: list[list[int]], graph: nx.DiGraph) -> int:
         The total crossing count for the whole layout.
     """
     return sum(
-        count_crossings(layers[i], layers[i + 1], graph)
-        for i in range(len(layers) - 1)
+        count_crossings(layers[i], layers[i + 1], graph) for i in range(len(layers) - 1)
     )
+
 
 # --- Layout ---------------------------------------------------------------------------
 def reorder(
@@ -199,7 +200,7 @@ def layout_func(
         dy: Vertical spacing between successive layers.
         dx: Horizontal spacing between nodes within the same layer.
     """
-    
+
     # Re-usable list of layers, each a list of node ID's
     layers = [list(layer) for layer in nx.bfs_layers(view.graph, root)]
 
@@ -214,7 +215,6 @@ def layout_func(
     new_view.refresh()
 
 
-
 # --- Initialize graph -----------------------------------------------------------------
 fig, ax = create_figure()
 graph_data: dict[str, Iterable[str]] = load_graph_data()
@@ -222,10 +222,9 @@ G = GraphView(fig, ax, nx.DiGraph(graph_data), axis_lim=(0, 100), spawn_margin=2
 start_layout = G.pos.copy()
 
 # --- Main  ----------------------------------------------------------------------------
-
-# root is A, which relabels to node 0; find it structurally to be safe
-root_node = next(n for n in G.graph if G.graph.in_degree(n) == 0)
-G.move_node(root_node, (50, 75))  # place root at top center
+coords_root: tuple[float, float] = (50, 75)
+root_node = [n for n in G.graph if G.graph.in_degree(n) == 0][0]
+G.move_node(root_node, coords_root)  # place root at top center
 layout_func(G, root_node)
 
 final_layout = G.pos.copy()
