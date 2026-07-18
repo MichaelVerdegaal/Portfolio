@@ -186,7 +186,7 @@ def reorder(
 
 
 def layout_func(
-    view: GraphView, root: int, top: float = 75, dy: float = 10, dx: float = 3
+    view: GraphView, root: int, top: float = 75, dy: float = 10, dx: float = 4
 ) -> None:
     """Arrange nodes vertically by BFS depth below the root.
 
@@ -245,13 +245,12 @@ def animate(frame: int):
     return G.get_artists()
 
 
-# for label in G._labels:
-#     label.set_visible(False)
-
-
 anim = FuncAnimation(
     fig, func=animate, interval=INTERVAL_MS, frames=FRAMES, repeat=False, blit=True
 )
+# save animation as mp4
+anim.save("animation.mp4", writer="ffmpeg")
+
 
 plt.tight_layout()
 plt.show()

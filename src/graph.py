@@ -1,6 +1,5 @@
 from collections.abc import Iterable
 
-import matplotlib.patheffects as pe
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
@@ -8,11 +7,13 @@ import yaml
 from matplotlib.axes import Axes
 from matplotlib.collections import LineCollection, PathCollection
 from matplotlib.figure import Figure
-from matplotlib.text import Annotation
+from matplotlib.font_manager import FontProperties
+from matplotlib.textpath import TextPath
+from matplotlib.transforms import Affine2D
 from numpy import float64
 from numpy._typing._array_like import NDArray
 
-from src.mpl_utils import COLOR_BG, COLOR_EDGES, COLOR_NODES
+from src.mpl_utils import COLOR_EDGES, COLOR_NODES
 
 NodeName = str
 GraphAttr = dict[str, object]
@@ -98,21 +99,30 @@ class GraphView:
         _ = self.ax.add_collection(self._edge_lines)
 
         # Labels above the nodes
-        self._labels: list[Annotation] = [
-            ax.annotate(
-                str(self.graph.nodes[node]["name"]),
-                xy=self._pos[node],
-                xytext=(-3, 3),
-                textcoords="offset points",
-                horizontalalignment="right",
-                verticalalignment="bottom",
-                color="white",
-                zorder=2,
-                path_effects=[pe.withStroke(linewidth=2.5, foreground=COLOR_BG)],
-                parse_math=False,
+        label_font = FontProperties(size=10)
+        label_paths = []
+        for node in self.graph:
+            text_path = TextPath(
+                (0, 0), str(self.graph.nodes[node]["name"]), prop=label_font
             )
-            for node in self.graph
-        ]
+            extents = text_path.get_extents()
+            # Anchor: centered horizontally, 4pt above the node
+            anchor = Affine2D().translate(-extents.width / 2 - extents.x0, 4)
+            label_paths.append(anchor.transform_path(text_path))
+
+        self._label_collection: PathCollection = PathCollection(
+            label_paths,
+            offsets=self._pos,
+            offset_transform=ax.transData,
+            transform=Affine2D().scale(fig.dpi / 72),
+            facecolor="white",
+            edgecolor="white",
+            linewidth=1,
+            joinstyle="round",
+            capstyle="round",
+            zorder=2,
+        )
+        _ = ax.add_collection(self._label_collection)
 
     @property
     def pos(self) -> npt.NDArray[np.float64]:
@@ -137,8 +147,7 @@ class GraphView:
         """
         self._scatter.set_offsets(self._pos)
         self._edge_lines.set_segments(self._pos[self._edge_idx])
-        for node, label in enumerate(self._labels):
-            label.xy = self._pos[node]
+        self._label_collection.set_offsets(self._pos)
 
     def move_node(self, node: int, xy: npt.ArrayLike) -> None:
         """Set the position of a single node without refreshing the artists.
@@ -173,11 +182,11 @@ class GraphView:
         """
         nx.set_node_attributes(self.graph, {n: self._pos[n] for n in self.graph}, "pos")
 
-    def get_artists(self) -> tuple[PathCollection, LineCollection]:
+    def get_artists(self) -> tuple[PathCollection, LineCollection, PathCollection]:
         """Return the node and edge artists for use in animation blitting.
 
         Returns:
-            A (PathCollection, LineCollection, Annotation...) tuple with the node scatter,
+            A (PathCollection, LineCollection, PathCollection) tuple with the node scatter,
             the edge line collection, and the node labels.
         """
-        return (self._scatter, self._edge_lines, *self._labels)
+        return (self._scatter, self._edge_lines, self._label_collection)
