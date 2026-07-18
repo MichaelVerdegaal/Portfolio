@@ -245,6 +245,10 @@ def animate(frame: int):
     return G.get_artists()
 
 
+# for label in G._labels:
+#     label.set_visible(False)
+
+
 anim = FuncAnimation(
     fig, func=animate, interval=INTERVAL_MS, frames=FRAMES, repeat=False, blit=True
 )

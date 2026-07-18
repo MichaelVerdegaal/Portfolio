@@ -108,6 +108,7 @@ class GraphView:
                 color="white",
                 zorder=2,
                 path_effects=[pe.withStroke(linewidth=2.5, foreground=COLOR_BG)],
+                parse_math=False,
             )
             for node in self.graph
         ]
