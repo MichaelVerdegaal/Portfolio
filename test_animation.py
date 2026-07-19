@@ -130,12 +130,7 @@ def total_crossings(layers: list[list[int]], graph: nx.DiGraph) -> int:
 
 # --- Layout ---------------------------------------------------------------------------
 def reorder(
-    view: GraphView,
-    root: int,
-    layers: list[list[int]],
-    dx: float = 10,
-    iterations: int = 2,
-) -> GraphView:
+    view: GraphView, iterations: int = 1):
     """Refine node ordering across layers to reduce edge crossings.
 
     Alternates top-down and bottom-up barycenter sweeps per iteration,
@@ -143,44 +138,19 @@ def reorder(
 
     Args:
         view: The GraphView whose nodes will be reordered.
-        root: The integer id of the root node.
-        layers: A list of layers, each a list of node IDs.
-        dx: Horizontal spacing between nodes within the same layer.
-        iterations: Number of top-down/bottom-up sweep pairs.
+        iterations: Number iterations
 
     Returns:
         The GraphView with nodes reordered.
     """
-    for _ in range(iterations):
-        # --- Top-down: order each layer by mean x of its parents ---
-        for layer in layers[1:]:
-            barycenter = {}
-            for node in layer:
-                parents = list(view.graph.predecessors(node))
-                barycenter[node] = (
-                    np.mean([view.get_node_coords(p)[0] for p in parents])
-                    if parents
-                    else view.get_node_coords(node)[0]
-                )
-            order = [n for n, _ in sorted(barycenter.items(), key=lambda kv: kv[1])]
-            center_x = view.get_node_coords(root)[0]
-            for i, node in enumerate(order):
-                view._pos[node, 0] = center_x + (i - (len(order) - 1) / 2) * dx
+    for i in range(iterations):
+        disp: dict = {}
 
-        # --- Bottom-up: order each layer by mean x of its children ---
-        for layer in reversed(layers[:-1]):
-            barycenter = {}
-            for node in layer:
-                children = list(view.graph.successors(node))
-                barycenter[node] = (
-                    np.mean([view.get_node_coords(c)[0] for c in children])
-                    if children
-                    else view.get_node_coords(node)[0]
-                )
-            order = [n for n, _ in sorted(barycenter.items(), key=lambda kv: kv[1])]
-            center_x = view.get_node_coords(root)[0]
-            for i, node in enumerate(order):
-                view._pos[node, 0] = center_x + (i - (len(order) - 1) / 2) * dx
+        for n in view.graph.nodes:
+            disp[n] = 0
+
+        for 
+            print(f"{i}-n{n}: {view.graph.adj[n]}")
 
     return view
 
@@ -210,7 +180,7 @@ def layout_func(
 
     # Root keeps its order; each deeper layer is ordered by the mean x of its
     # parents in the already-fixed layer above.
-    new_view = reorder(view, root, layers, dx=dx, iterations=10)
+    new_view = reorder(view)
 
     new_view.refresh()
 
@@ -249,8 +219,7 @@ anim = FuncAnimation(
     fig, func=animate, interval=INTERVAL_MS, frames=FRAMES, repeat=False, blit=True
 )
 # save animation as mp4
-anim.save("animation.mp4", writer="ffmpeg")
-
+# anim.save("animation.mp4", writer="ffmpeg")
 
 plt.tight_layout()
 plt.show()
