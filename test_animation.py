@@ -1,14 +1,11 @@
 from collections.abc import Callable, Iterable
-from itertools import combinations
-from typing import Any
 
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
+import numpy.typing as npt
 from matplotlib.animation import FuncAnimation
-from networkx.classes.reportviews import NodeView
-from numpy import float64, floating
-from numpy._typing._array_like import NDArray
+
 from src.graph import GraphView, load_graph_data
 from src.mpl_utils import create_figure
 
@@ -133,58 +130,139 @@ def total_crossings(layers: list[list[int]], graph: nx.DiGraph) -> int:
 
 
 # --- Layout ---------------------------------------------------------------------------
-def fr_step(
-    iteration: int,
-    view: GraphView,
-    node_pairs: list[tuple[int, int]],
-    edges: list[tuple[int, int]],
-    k: float,
-    t_initial: float,
-) -> None:
-    """Run a single Fruchterman-Reingold iteration in place.
+def longest_path_depth(graph: nx.DiGraph) -> dict[int, int]:
+    """Assign each node a layer via longest-path layering.
+
+    A node's depth is one more than the maximum depth of its parents,
+    which guarantees every edge points to a strictly deeper layer.
 
     Args:
-        iteration: The current iteration number
-        view: The GraphView whose nodes will be moved.
-        node_pairs: All ordered node pairs, for the repulsion sweep.
-        edges: The graph edges, for the attraction sweep.
-        k: Ideal edge length constant.
-        t_initial: Maximum displacement per iteration (initial temperature).
+        graph: A directed acyclic graph.
+
+    Returns:
+        A mapping from node id to layer index (root = 0).
     """
-    s = iteration / FRAMES
-    t = t_initial * (1 - ease_smoothstep(s))
+    depth: dict[int, int] = {}
+    for node in nx.topological_sort(graph):
+        parents = list(graph.predecessors(node))
+        depth[node] = 1 + max(depth[p] for p in parents) if parents else 0
+    return depth
 
-    nodes: NodeView = view.graph.nodes
-    disp = {}
 
-    # Reset displacement
-    for n in nodes:
-        disp[n] = 0
+# Setup (once): group_id, (N,) int array, -1 for the root
+def branch_groups(graph: nx.DiGraph, root: int) -> npt.NDArray[np.int64]:
+    """Assign each node the top-level branch it first descends from.
 
-    # Calculate repulsion for all node pairs
-    for n1, n2 in node_pairs:
-        delta: NDArray[float64] = view._pos[n1] - view._pos[n2]
-        d: floating | float = max(np.linalg.norm(delta), 0.01)
-        disp[n1] += (delta / d) * (k**2 / d)
-        disp[n2] -= (delta / d) * (k**2 / d)
+    Args:
+        graph: A directed acyclic graph.
+        root: The integer id of the root node.
 
-    # Calculate attraction for all edges
-    for n1, n2 in edges:
-        delta: NDArray[float64] = view._pos[n1] - view._pos[n2]
-        d = max(np.linalg.norm(delta), 0.01)
-        disp[n1] -= (delta / d) * (d**2 / k)
-        disp[n2] += (delta / d) * (d**2 / k)
+    Returns:
+        (N,) array of group indices; the root gets -1.
+    """
+    group = np.full(graph.number_of_nodes(), -1, dtype=np.int64)
+    for gid, branch_root in enumerate(graph.successors(root)):
+        for node in nx.bfs_tree(graph, branch_root):
+            if group[node] == -1:
+                group[node] = gid
+    return group
 
-    # Set new positions based on displacement, limited to t units per iteration
-    for n in nodes:
-        pos_n = view._pos[n]
-        length = np.linalg.norm(disp[n])
-        if length > 0.0:
-            view._pos[n] = pos_n + disp[n] * (t / (t + length))
+# Setup (once): group_id, (N,) int array, -1 for the root
+def branch_groups(graph: nx.DiGraph, root: int) -> npt.NDArray[np.int64]:
+    """Assign each node the top-level branch it first descends from.
 
-    view._pos = np.clip(view._pos, 0, 100, out=view._pos)
+    Args:
+        graph: A directed acyclic graph.
+        root: The integer id of the root node.
 
-    view.refresh()
+    Returns:
+        (N,) array of group indices; the root gets -1.
+    """
+    group = np.full(graph.number_of_nodes(), -1, dtype=np.int64)
+    for gid, branch_root in enumerate(graph.successors(root)):
+        for node in nx.bfs_tree(graph, branch_root):
+            if group[node] == -1:
+                group[node] = gid
+    return group
+
+
+def fr_step(
+    pos: npt.NDArray[np.float64],
+    edge_idx: npt.NDArray[np.int32],
+    radial_target: npt.NDArray[np.float64],
+    node_weight: npt.NDArray[np.float64],
+    k: float,
+    t: float,
+    center: tuple[float, float] = (50.0, 50.0),
+    gravity: float = 0.08,
+    cohesion: float = 0.1,
+    separation: float = 0.1,
+    group_id: npt.NDArray[np.int64] | None = None,
+) -> npt.NDArray[np.float64]:
+    """Compute one Fruchterman-Reingold displacement with radial gravity.
+
+    Repulsion between two nodes is scaled by the product of their
+    weights, so high-degree nodes claim more space. Radial gravity
+    pulls each node toward a ring around the center whose radius is
+    set by the node's depth in the hierarchy.
+
+    Args:
+        pos: (N, 2) array of current node positions. Not modified.
+        edge_idx: (E, 2) array of edge endpoint indices.
+        radial_target: (N,) array of per-node target radii from layering.
+        node_weight: (N,) array of repulsion weights, e.g. degree-based.
+        k: Ideal edge length constant.
+        t: Temperature; scales the soft displacement limit.
+        center: The (x, y) point the rings are centered on.
+        gravity: Spring strength pulling nodes toward their target ring.
+        cohesion: Spring strength pulling nodes toward their group centroid.
+        separation: Spring strength pushing group centroids apart.
+        group_id: (N,) array of group indices for cohesion; -1 for nodes with no group.
+
+    Returns:
+        An (N, 2) displacement array, soft-limited by the temperature.
+    """
+    # Repulsion: all pairs, scaled per pair by the product of node weights.
+    delta = pos[:, None, :] - pos[None, :, :]  # (N, N, 2)
+    dist = np.maximum(np.linalg.norm(delta, axis=-1), 0.01)  # (N, N)
+    pair_weight = node_weight[:, None] * node_weight[None, :]  # (N, N)
+    disp = (delta / dist[..., None] * (pair_weight * k**2 / dist)[..., None]).sum(
+        axis=1
+    )
+
+    # Attraction: per edge, scattered back to both endpoints.
+    e_delta = pos[edge_idx[:, 0]] - pos[edge_idx[:, 1]]  # (E, 2)
+    e_dist = np.maximum(np.linalg.norm(e_delta, axis=1), 0.01)  # (E,)
+    pull = e_delta / e_dist[:, None] * (e_dist**2 / k)[:, None]
+    np.add.at(disp, edge_idx[:, 0], -pull)
+    np.add.at(disp, edge_idx[:, 1], pull)
+
+    # Radial gravity: spring toward each node's target ring around center.
+    from_center = pos - np.asarray(center)  # (N, 2)
+    radius = np.maximum(np.linalg.norm(from_center, axis=1), 0.01)  # (N,)
+    outward = from_center / radius[:, None]  # (N, 2) unit vectors
+    disp += outward * (gravity * (radial_target - radius))[:, None]
+
+    # Cohesion: pull toward own group's centroid.
+    n_groups = group_id.max() + 1
+    member = group_id >= 0
+    centroids = np.zeros((n_groups, 2))
+    np.add.at(centroids, group_id[member], pos[member])
+    counts = np.bincount(group_id[member], minlength=n_groups)
+    centroids /= counts[:, None]
+    disp[member] += cohesion * (centroids[group_id[member]] - pos[member])
+
+    # Separation: centroids repel each other; members inherit the push.
+    c_delta = centroids[:, None, :] - centroids[None, :, :]  # (G, G, 2)
+    c_dist = np.maximum(np.linalg.norm(c_delta, axis=-1), 0.01)  # (G, G)
+    c_push = (c_delta / c_dist[..., None] * (separation * k**2 / c_dist)[..., None]).sum(
+        axis=1
+    )  # (G, 2)
+    disp[member] += c_push[group_id[member]]
+
+    # Soft temperature limit, per node.
+    length = np.linalg.norm(disp, axis=1, keepdims=True)  # (N, 1)
+    return disp * (t / (t + length))
 
 
 # --- Initialize graph -----------------------------------------------------------------
@@ -193,29 +271,46 @@ graph_data: dict[str, Iterable[str]] = load_graph_data()
 G = GraphView(fig, ax, nx.DiGraph(graph_data), axis_lim=(0, 100), spawn_margin=20)
 
 # --- Main  ----------------------------------------------------------------------------
-# Start with circular layout, which FR will then refine.
-circ_layout = nx.circular_layout(G.graph, scale=40, center=(50, 50))
-# Transform the circular layout into a (N, 2) array aligned with node ids
-G.pos = np.array([circ_layout[n] for n in G.graph.nodes], dtype=np.float64)
+edge_idx = np.array(list(G.graph.edges), dtype=np.int32)
 
-# FR knobs
-nodes = G.graph.nodes
-node_pairs = list(combinations(nodes, 2))
-edges = list(G.graph.edges)
-k: float = 5
-t: float = 0.2
+depth = longest_path_depth(G.graph)
+n_layers = max(depth.values()) + 1
+DR: float = 42 / max(n_layers - 1, 1)  # ring spacing; outermost ring at radius 42
+radial_target = np.array(
+    [depth[n] * DR for n in sorted(G.graph)], dtype=np.float64
+)
+
+degree = np.array([G.graph.degree[n] for n in sorted(G.graph)], dtype=np.float64)
+node_weight = np.sqrt(degree / degree.mean())
+velocity = np.zeros_like(G.pos)  # module level, next to the knobs
+
+group_id = branch_groups(G.graph, root=0)
+
+K: float = 4
+T_INITIAL: float = 0.15
+GRAVITY: float = 1
+CENTER: tuple[float, float] = (50.0, 50.0)
+MOMENTUM: float = 0.6
+COHESION: float = 0.1
+SEPARATION: float = 0.2
 
 
 def animate(frame: int):
     """Advance the layout by one Fruchterman-Reingold iteration.
 
     Args:
-        frame: The current frame index (unused; each call is one FR step).
+        frame: The current frame index, which drives the cooling schedule.
 
     Returns:
         The node and edge artists for blitting.
     """
-    fr_step(frame, G, node_pairs, edges, k, t)
+    global velocity
+    t = T_INITIAL * (1 - ease_smoothstep(frame / FRAMES))
+    
+    step = fr_step(G.pos, edge_idx, radial_target, node_weight, K, t, CENTER, GRAVITY, COHESION, SEPARATION, group_id=group_id)
+    
+    velocity = MOMENTUM * velocity + step  # MOMENTUM ~ 0.5-0.7
+    G.pos = np.clip(G.pos + velocity, 0, 100)
 
     return G.get_artists()
 
