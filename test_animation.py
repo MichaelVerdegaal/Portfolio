@@ -1,14 +1,14 @@
 from collections.abc import Callable, Iterable
 from itertools import combinations
+from typing import Any
 
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 from matplotlib.animation import FuncAnimation
 from networkx.classes.reportviews import NodeView
-from numpy import float64
+from numpy import float64, floating
 from numpy._typing._array_like import NDArray
-
 from src.graph import GraphView, load_graph_data
 from src.mpl_utils import create_figure
 
@@ -19,7 +19,7 @@ FRAMES = int(DURATION_SECONDS * TARGET_FPS)
 
 
 # --- History builders: every mode ends as a (frames, N, 2) array ----------------------
-def ease_bezier(t: float) -> float:
+def ease_smoothstep(t: float) -> float:
     """Cubic bezier easing function for smooth transition.
 
     Args:
@@ -62,7 +62,7 @@ def tween_history(
     start: np.ndarray,
     target: np.ndarray,
     frames: int,
-    ease: Callable[[float], float] = ease_bezier,
+    ease: Callable[[float], float] = ease_smoothstep,
 ) -> np.ndarray:
     """Interpolate from start to a precomputed target layout.
 
@@ -74,7 +74,7 @@ def tween_history(
         target: Target (N, 2) position array.
         frames: Number of frames in the output history.
         ease: Easing function mapping [0, 1] -> [0, 1]. Defaults to
-            ease_bezier.
+            ease_smoothstep.
 
     Returns:
         An array of shape (frames, N, 2) with the interpolated position
@@ -152,7 +152,7 @@ def fr_step(
         t_initial: Maximum displacement per iteration (initial temperature).
     """
     s = iteration / FRAMES
-    t = t_initial * (1 - ease_bezier(s))
+    t = t_initial * (1 - ease_smoothstep(s))
 
     nodes: NodeView = view.graph.nodes
     disp = {}
@@ -163,18 +163,14 @@ def fr_step(
 
     # Calculate repulsion for all node pairs
     for n1, n2 in node_pairs:
-        pos_n1 = view._pos[n1]
-        pos_n2 = view._pos[n2]
-        delta: NDArray[float64] = pos_n1 - pos_n2
-        d = max(np.linalg.norm(delta), 0.01)
+        delta: NDArray[float64] = view._pos[n1] - view._pos[n2]
+        d: floating | float = max(np.linalg.norm(delta), 0.01)
         disp[n1] += (delta / d) * (k**2 / d)
         disp[n2] -= (delta / d) * (k**2 / d)
 
     # Calculate attraction for all edges
     for n1, n2 in edges:
-        pos_n1 = view._pos[n1]
-        pos_n2 = view._pos[n2]
-        delta: NDArray[float64] = pos_n1 - pos_n2
+        delta: NDArray[float64] = view._pos[n1] - view._pos[n2]
         d = max(np.linalg.norm(delta), 0.01)
         disp[n1] -= (delta / d) * (d**2 / k)
         disp[n2] += (delta / d) * (d**2 / k)
@@ -197,6 +193,11 @@ graph_data: dict[str, Iterable[str]] = load_graph_data()
 G = GraphView(fig, ax, nx.DiGraph(graph_data), axis_lim=(0, 100), spawn_margin=20)
 
 # --- Main  ----------------------------------------------------------------------------
+# Start with circular layout, which FR will then refine.
+circ_layout = nx.circular_layout(G.graph, scale=40, center=(50, 50))
+# Transform the circular layout into a (N, 2) array aligned with node ids
+G.pos = np.array([circ_layout[n] for n in G.graph.nodes], dtype=np.float64)
+
 # FR knobs
 nodes = G.graph.nodes
 node_pairs = list(combinations(nodes, 2))
