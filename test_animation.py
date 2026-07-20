@@ -1,14 +1,13 @@
 from collections.abc import Callable, Iterable
-from numpy._typing._array_like import NDArray
-from numpy._typing._array_like import NDArray
-from numpy import float64
-from networkx.classes.reportviews import NodeView
-from typing import Any
+from itertools import combinations
 
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 from matplotlib.animation import FuncAnimation
+from networkx.classes.reportviews import NodeView
+from numpy import float64
+from numpy._typing._array_like import NDArray
 
 from src.graph import GraphView, load_graph_data
 from src.mpl_utils import create_figure
@@ -134,126 +133,117 @@ def total_crossings(layers: list[list[int]], graph: nx.DiGraph) -> int:
 
 
 # --- Layout ---------------------------------------------------------------------------
-from itertools import permutations
-def reorder(
-    view: GraphView, iterations: int = 10):
-    """Refine node ordering across layers t reduce edge crossings.
-
-    Alternates top-down and bottom-up barycenter sweeps per iteration,
-    a simplified Sugiyama crossing reduction.
+def fr_step(
+    iteration: int,
+    view: GraphView,
+    node_pairs: list[tuple[int, int]],
+    edges: list[tuple[int, int]],
+    k: float,
+    t_initial: float,
+) -> None:
+    """Run a single Fruchterman-Reingold iteration in place.
 
     Args:
-        view: The GraphView whose nodes will be reordered.
-        iterations: Number iterations
-
-    Returns:
-        The GraphView with nodes reordered.
+        iteration: The current iteration number
+        view: The GraphView whose nodes will be moved.
+        node_pairs: All ordered node pairs, for the repulsion sweep.
+        edges: The graph edges, for the attraction sweep.
+        k: Ideal edge length constant.
+        t_initial: Maximum displacement per iteration (initial temperature).
     """
+    t = t_initial * (1 - iteration / FRAMES)
+
     nodes: NodeView = view.graph.nodes
-    node_pairs = list(permutations(nodes, 2))
-    edges = view.graph.edges
+    disp = {}
 
-    # Knobs
-    area: int = 100 * 100
-    C: float = 1.0
-    k: float = C * np.sqrt(area / len(nodes))
-    t: int = 10
+    # Reset displacement
+    for n in nodes:
+        disp[n] = 0
 
-    for i in range(iterations):
-        print(f"Iteration {i}")
-        disp = {}
+    # Calculate repulsion for all node pairs
+    for n1, n2 in node_pairs:
+        pos_n1 = view._pos[n1]
+        pos_n2 = view._pos[n2]
+        delta: NDArray[float64] = pos_n1 - pos_n2
+        d = max(np.linalg.norm(delta), 0.01)
+        disp[n1] += (delta / d) * (k**2 / d)
+        disp[n2] -= (delta / d) * (k**2 / d)
 
-        # Reset displacement
-        for n in nodes:
-            disp[n] = 0
+    # Calculate attraction for all edges
+    for n1, n2 in edges:
+        pos_n1 = view._pos[n1]
+        pos_n2 = view._pos[n2]
+        delta: NDArray[float64] = pos_n1 - pos_n2
+        d = max(np.linalg.norm(delta), 0.01)
+        disp[n1] -= (delta / d) * (d**2 / k)
+        disp[n2] += (delta / d) * (d**2 / k)
 
-        # Calculate repulsion for all node pairs
-        for n1, n2 in node_pairs:
-            pos_n1 = view.get_node_coords(n1)
-            pos_n2 = view.get_node_coords(n2)
-            delta: NDArray[float64] = pos_n2 - pos_n1
-            distance = np.linalg.norm(delta)
-            d: float = np.abs(distance)
-            disp[n1] += (delta / d) * (k**2 / d)
-            disp[n2] -= (delta / d) * (k**2 / d)
+    # Set new positions based on displacement, limited to t units per iteration
+    for n in nodes:
+        pos_n = view._pos[n]
+        length = np.linalg.norm(disp[n])
+        if length > 0.0:
+            view._pos[n] = pos_n + disp[n] / length * min(length, t)
 
-        # Calculate attraction for all edges
-        for n1, n2 in edges:
-            pos_n1: NDArray[float64] = view.get_node_coords(n1)
-            pos_n2 = view.get_node_coords(n2)
-            delta: NDArray[float64] = pos_n2 - pos_n1
-            distance = np.linalg.norm(delta)
-            d: float = np.abs(distance)
-            disp[n1] -= (delta / d) * (k**2 / d)
-            disp[n2] += (delta / d) * (k**2 / d)
+    view._pos = np.clip(view._pos, 0, 100, out=view._pos)
 
-        # Set new positions based on displacement, limited to t units per iteration
-        for n in nodes:
-            pos_n = view.get_node_coords(n)
-            pos_n += (disp[n] / np.abs(disp[n]) * np.minimum(np.abs(disp[n]), t))
-            view.move_node(n, pos_n)
-
-        view.refresh()
-
-    return view
+    view.refresh()
 
 
-def layout_func(
-    view: GraphView, root: int, top: float = 75, dy: float = 10, dx: float = 4
-) -> None:
+def layout_func(view: GraphView, root: int, top: float = 75, dy: float = 10) -> None:
     """Arrange nodes vertically by BFS depth below the root.
 
-    Each BFS layer is placed at a fixed y coordinate. Node x coordinates
-    are left unchanged.
+    Sets the starting positions the live layout begins from. The
+    Fruchterman-Reingold iterations then run one per animation frame.
 
     Args:
         view: The GraphView whose nodes will be repositioned.
         root: The integer id of the root node.
         top: The y coordinate of the root layer.
         dy: Vertical spacing between successive layers.
-        dx: Horizontal spacing between nodes within the same layer.
     """
 
     # Re-usable list of layers, each a list of node ID's
     layers = [list(layer) for layer in nx.bfs_layers(view.graph, root)]
 
-    # First we fix the height so that no child is above their parent.
+    # Fix the height so that no child is above their parent.
     for depth, layer in enumerate(layers):
         view._pos[layer, 1] = top - depth * dy
 
-    # Root keeps its order; each deeper layer is ordered by the mean x of its
-    # parents in the already-fixed layer above.
-    new_view = reorder(view)
-
-    new_view.refresh()
+    view.refresh()
 
 
 # --- Initialize graph -----------------------------------------------------------------
 fig, ax = create_figure()
 graph_data: dict[str, Iterable[str]] = load_graph_data()
 G = GraphView(fig, ax, nx.DiGraph(graph_data), axis_lim=(0, 100), spawn_margin=20)
-start_layout = G.pos.copy()
 
 # --- Main  ----------------------------------------------------------------------------
-coords_root: tuple[float, float] = (50, 75)
-root_node = [n for n in G.graph if G.graph.in_degree(n) == 0][0]
-G.move_node(root_node, coords_root)  # place root at top center
-layout_func(G, root_node)
+# coords_root: tuple[float, float] = (50, 75)
+# root_node = [n for n in G.graph if G.graph.in_degree(n) == 0][0]
+# G.move_node(root_node, coords_root)  # place root at top center
+# layout_func(G, root_node)  # initial BFS layering; FR runs live per frame
 
-final_layout = G.pos.copy()
-history = tween_history(start_layout, final_layout, FRAMES)
+# Fixed topology + FR knobs, computed once
+nodes = G.graph.nodes
+node_pairs = list(combinations(nodes, 2))
+edges = list(G.graph.edges)
+area: int = 100
+C: float = 0.6
+k: float = 4
+t: float = 0.1
 
 
 def animate(frame: int):
-    """Update node positions for a single animation frame.
+    """Advance the layout by one Fruchterman-Reingold iteration.
 
     Args:
-        frame: The current frame index.
+        frame: The current frame index (unused; each call is one FR step).
 
     Returns:
         The node and edge artists for blitting.
     """
-    G.pos = history[frame]  # setter calls refresh()
+    fr_step(frame, G, node_pairs, edges, k, t)
 
     return G.get_artists()
 
@@ -262,7 +252,7 @@ anim = FuncAnimation(
     fig, func=animate, interval=INTERVAL_MS, frames=FRAMES, repeat=False, blit=True
 )
 # save animation as mp4
-# anim.save("animation.mp4", writer="ffmpeg")
+anim.save("animation.mp4", writer="ffmpeg")
 
 plt.tight_layout()
 plt.show()
