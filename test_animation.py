@@ -190,41 +190,13 @@ def fr_step(
     view.refresh()
 
 
-def layout_func(view: GraphView, root: int, top: float = 75, dy: float = 10) -> None:
-    """Arrange nodes vertically by BFS depth below the root.
-
-    Sets the starting positions the live layout begins from. The
-    Fruchterman-Reingold iterations then run one per animation frame.
-
-    Args:
-        view: The GraphView whose nodes will be repositioned.
-        root: The integer id of the root node.
-        top: The y coordinate of the root layer.
-        dy: Vertical spacing between successive layers.
-    """
-
-    # Re-usable list of layers, each a list of node ID's
-    layers = [list(layer) for layer in nx.bfs_layers(view.graph, root)]
-
-    # Fix the height so that no child is above their parent.
-    for depth, layer in enumerate(layers):
-        view._pos[layer, 1] = top - depth * dy
-
-    view.refresh()
-
-
 # --- Initialize graph -----------------------------------------------------------------
 fig, ax = create_figure()
 graph_data: dict[str, Iterable[str]] = load_graph_data()
 G = GraphView(fig, ax, nx.DiGraph(graph_data), axis_lim=(0, 100), spawn_margin=20)
 
 # --- Main  ----------------------------------------------------------------------------
-# coords_root: tuple[float, float] = (50, 75)
-# root_node = [n for n in G.graph if G.graph.in_degree(n) == 0][0]
-# G.move_node(root_node, coords_root)  # place root at top center
-# layout_func(G, root_node)  # initial BFS layering; FR runs live per frame
-
-# Fixed topology + FR knobs, computed once
+# FR knobs
 nodes = G.graph.nodes
 node_pairs = list(combinations(nodes, 2))
 edges = list(G.graph.edges)
