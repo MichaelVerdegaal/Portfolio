@@ -228,10 +228,9 @@ G = GraphView(fig, ax, nx.DiGraph(graph_data), axis_lim=(0, 100), spawn_margin=2
 nodes = G.graph.nodes
 node_pairs = list(combinations(nodes, 2))
 edges = list(G.graph.edges)
-area: int = 100
-C: float = 0.6
+C: float = 0.2
 k: float = 4
-t: float = 0.1
+t: float = 0.2
 
 
 def animate(frame: int):
@@ -252,7 +251,7 @@ anim = FuncAnimation(
     fig, func=animate, interval=INTERVAL_MS, frames=FRAMES, repeat=False, blit=True
 )
 # save animation as mp4
-anim.save("animation.mp4", writer="ffmpeg")
+# anim.save("animation.mp4", writer="ffmpeg")
 
 plt.tight_layout()
 plt.show()
