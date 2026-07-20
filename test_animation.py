@@ -1,4 +1,9 @@
 from collections.abc import Callable, Iterable
+from numpy._typing._array_like import NDArray
+from numpy._typing._array_like import NDArray
+from numpy import float64
+from networkx.classes.reportviews import NodeView
+from typing import Any
 
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -9,7 +14,7 @@ from src.graph import GraphView, load_graph_data
 from src.mpl_utils import create_figure
 
 TARGET_FPS = 60
-DURATION_SECONDS = 5
+DURATION_SECONDS = 10
 INTERVAL_MS = 1000 // TARGET_FPS
 FRAMES = int(DURATION_SECONDS * TARGET_FPS)
 
@@ -129,9 +134,10 @@ def total_crossings(layers: list[list[int]], graph: nx.DiGraph) -> int:
 
 
 # --- Layout ---------------------------------------------------------------------------
+from itertools import permutations
 def reorder(
-    view: GraphView, iterations: int = 1):
-    """Refine node ordering across layers to reduce edge crossings.
+    view: GraphView, iterations: int = 10):
+    """Refine node ordering across layers t reduce edge crossings.
 
     Alternates top-down and bottom-up barycenter sweeps per iteration,
     a simplified Sugiyama crossing reduction.
@@ -143,14 +149,51 @@ def reorder(
     Returns:
         The GraphView with nodes reordered.
     """
-    for i in range(iterations):
-        disp: dict = {}
+    nodes: NodeView = view.graph.nodes
+    node_pairs = list(permutations(nodes, 2))
+    edges = view.graph.edges
 
-        for n in view.graph.nodes:
+    # Knobs
+    area: int = 100 * 100
+    C: float = 1.0
+    k: float = C * np.sqrt(area / len(nodes))
+    t: int = 10
+
+    for i in range(iterations):
+        print(f"Iteration {i}")
+        disp = {}
+
+        # Reset displacement
+        for n in nodes:
             disp[n] = 0
 
-        for 
-            print(f"{i}-n{n}: {view.graph.adj[n]}")
+        # Calculate repulsion for all node pairs
+        for n1, n2 in node_pairs:
+            pos_n1 = view.get_node_coords(n1)
+            pos_n2 = view.get_node_coords(n2)
+            delta: NDArray[float64] = pos_n2 - pos_n1
+            distance = np.linalg.norm(delta)
+            d: float = np.abs(distance)
+            disp[n1] += (delta / d) * (k**2 / d)
+            disp[n2] -= (delta / d) * (k**2 / d)
+
+        # Calculate attraction for all edges
+        for n1, n2 in edges:
+            pos_n1: NDArray[float64] = view.get_node_coords(n1)
+            pos_n2 = view.get_node_coords(n2)
+            delta: NDArray[float64] = pos_n2 - pos_n1
+            distance = np.linalg.norm(delta)
+            d: float = np.abs(distance)
+            disp[n1] -= (delta / d) * (k**2 / d)
+            disp[n2] += (delta / d) * (k**2 / d)
+
+        # Set new positions based on displacement, limited to t units per iteration
+        for n in nodes:
+            pos_n = view.get_node_coords(n)
+            pos_n += (disp[n] / np.abs(disp[n]) * np.minimum(np.abs(disp[n]), t))
+            view.move_node(n, pos_n)
+
+        view.refresh()
 
     return view
 
