@@ -151,7 +151,8 @@ def fr_step(
         k: Ideal edge length constant.
         t_initial: Maximum displacement per iteration (initial temperature).
     """
-    t = t_initial * (1 - iteration / FRAMES)
+    s = iteration / FRAMES
+    t = t_initial * (1 - ease_bezier(s))
 
     nodes: NodeView = view.graph.nodes
     disp = {}
@@ -183,7 +184,7 @@ def fr_step(
         pos_n = view._pos[n]
         length = np.linalg.norm(disp[n])
         if length > 0.0:
-            view._pos[n] = pos_n + disp[n] / length * min(length, t)
+            view._pos[n] = pos_n + disp[n] * (t / (t + length))
 
     view._pos = np.clip(view._pos, 0, 100, out=view._pos)
 
@@ -200,8 +201,7 @@ G = GraphView(fig, ax, nx.DiGraph(graph_data), axis_lim=(0, 100), spawn_margin=2
 nodes = G.graph.nodes
 node_pairs = list(combinations(nodes, 2))
 edges = list(G.graph.edges)
-C: float = 0.2
-k: float = 4
+k: float = 5
 t: float = 0.2
 
 
