@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "fa2>=1.1.0",
     "fastapi[standard-no-fastapi-cloud-cli]>=0.137.2",
     "matplotlib==3.10.8",
     "networkx>=3.6.1",
