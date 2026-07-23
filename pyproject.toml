@@ -5,6 +5,8 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "cython>=3.2.8",
+    "fa2",
     "fastapi[standard-no-fastapi-cloud-cli]>=0.137.2",
     "matplotlib==3.10.8",
     "networkx>=3.6.1",
@@ -23,3 +25,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
+
+[tool.uv.sources]
+fa2 = { git = "https://github.com/bhargavchippada/forceatlas2.git" }
