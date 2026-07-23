@@ -5,19 +5,13 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "fa2",
+    "fa2>=1.1.2",
     "fastapi[standard-no-fastapi-cloud-cli]>=0.137.2",
     "matplotlib==3.10.8",
     "networkx>=3.6.1",
     "numpy>=2.4.6",
     "pyyaml>=6.0.3",
 ]
-
-[tool.uv.sources]
-fa2 = { git = "https://github.com/bhargavchippada/forceatlas2.git" }
-
-[tool.uv.extra-build-dependencies]
-fa2 = ["cython", "setuptools"]
 
 [tool.ruff.lint]
 # Defaults (E4/E7/E9, F) plus import sorting (I), bugbear (B), and pyupgrade (UP).

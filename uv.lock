@@ -129,12 +129,13 @@ wheels = [
 [[package]]
 name = "fa2"
 version = "1.1.2"
-source = { git = "https://github.com/bhargavchippada/forceatlas2.git#2b72f7616c970a28fd63875d8c1b2c2d4ad2722f" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
     { name = "scipy" },
     { name = "tqdm" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/c0/8f/e6b63f021cec43049f77b321623e95c28e5a3ac6c4cd278ae8d10a6f09bd/fa2-1.1.2.tar.gz", hash = "sha256:cb38954bc867b46b08d4f7f39e5886e107b407ba1e30742aab265f6b5c3fbf17", size = 2971578, upload-time = "2026-03-23T06:01:29.036Z" }
 
 [[package]]
 name = "fastapi"
@@ -505,7 +506,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "fa2", git = "https://github.com/bhargavchippada/forceatlas2.git" },
+    { name = "fa2", specifier = ">=1.1.2" },
     { name = "fastapi", extras = ["standard-no-fastapi-cloud-cli"], specifier = ">=0.137.2" },
     { name = "matplotlib", specifier = "==3.10.8" },
     { name = "networkx", specifier = ">=3.6.1" },

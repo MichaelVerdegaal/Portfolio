@@ -19,8 +19,6 @@ AXIS_MAX = 100
 
 
 # --- Debugging ------------------------------------------------------------------------
-
-
 def count_crossings(above: list[int], below: list[int], graph: nx.DiGraph) -> int:
     """Count edge crossings between two adjacent layers.
 
@@ -95,11 +93,8 @@ def forceatlas2_history(
     def record(iteration: int, nodes: list) -> None:
         snapshots.append(np.array([[n.x, n.y] for n in nodes]))
 
-    engine = ForceAtlas2(
-        outboundAttractionDistribution=True,  # dissuade hubs
-        scalingRatio=2.0,
-        gravity=1.0,
-        jitterTolerance=1.0,
+    engine = ForceAtlas2.inferSettings(
+        graph,
         seed=3,
         verbose=False,
         backend="vectorized",
