@@ -7,6 +7,7 @@ import numpy.typing as npt
 from fa2 import ForceAtlas2
 from matplotlib.animation import FuncAnimation
 
+from src.animate import tween_history
 from src.graph import GraphView, load_graph_data
 from src.mpl_utils import create_figure
 
@@ -65,46 +66,6 @@ def total_crossings(layers: list[list[int]], graph: nx.DiGraph) -> int:
 
 
 # --- Layout ---------------------------------------------------------------------------
-def forceatlas2_history(
-    graph: nx.DiGraph,
-    start: npt.NDArray[np.float64],
-    iterations: int,
-) -> npt.NDArray[np.float64]:
-    """Run ForceAtlas2 and record node positions at every iteration.
-
-    The directed graph is symmetrised to the undirected adjacency matrix
-    ForceAtlas2 expects; layout runs to completion up front and the
-    animation replays the recorded history.
-
-    Args:
-        graph: The directed graph with integer nodes 0..N-1.
-        start: Initial (N, 2) position array. Not modified.
-        iterations: Number of ForceAtlas2 iterations to run.
-
-    Returns:
-        An array of shape (iterations, N, 2) with the position at each
-        iteration.
-    """
-    adjacency = nx.to_scipy_sparse_array(
-        graph.to_undirected(), nodelist=sorted(graph), dtype=np.float64
-    )
-    snapshots: list[npt.NDArray[np.float64]] = []
-
-    def record(iteration: int, nodes: list) -> None:
-        snapshots.append(np.array([[n.x, n.y] for n in nodes]))
-
-    engine = ForceAtlas2.inferSettings(
-        graph,
-        seed=3,
-        verbose=False,
-        backend="vectorized",
-    )
-    engine.forceatlas2(
-        adjacency, pos=start.copy(), iterations=iterations, callbacks=[record]
-    )
-    return np.array(snapshots)
-
-
 def fit_to_canvas(
     history: npt.NDArray[np.float64],
     low: float = AXIS_MIN + 10.0,
@@ -134,10 +95,30 @@ def fit_to_canvas(
 # --- Initialize graph -----------------------------------------------------------------
 fig, ax = create_figure()
 graph_data: dict[str, Iterable[str]] = load_graph_data()
-G = GraphView(fig, ax, nx.DiGraph(graph_data), axis_lim=(AXIS_MIN, AXIS_MAX), spawn_margin=20)
+G = GraphView(
+    fig, ax, 
+    nx.DiGraph(graph_data), 
+    axis_lim=(AXIS_MIN, AXIS_MAX), 
+    spawn_margin=20
+)
 
 # --- Main  ----------------------------------------------------------------------------
-history = fit_to_canvas(forceatlas2_history(G.graph, G.pos, FRAMES))
+start = G.pos.copy()
+undirected = G.graph.to_undirected()
+
+fa2 = ForceAtlas2.inferSettings(
+    undirected,
+    seed=3,
+    verbose=False,
+    backend="vectorized",
+)
+layout = fa2.forceatlas2_networkx_layout(
+    undirected,
+    pos={n: start[n] for n in undirected},
+    iterations=100,
+)
+target = fit_to_canvas(np.array([layout[n] for n in G.graph])[np.newaxis, ...])[0]
+history = tween_history(start, target, FRAMES)
 
 
 def animate(frame: int):

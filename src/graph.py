@@ -139,7 +139,9 @@ class GraphView:
         self._pos = new_pos
         self.refresh()
 
-    def layout_from(self, layout: dict[int, tuple[float, float] | npt.ArrayLike]) -> None:
+    def layout_from(
+        self, layout: dict[int, tuple[float, float] | npt.ArrayLike]
+    ) -> None:
         """Accept a finished NetworkX layout dict and apply it via the pos setter.
 
         NetworkX layout functions (nx.circular_layout, nx.spring_layout, etc.)
