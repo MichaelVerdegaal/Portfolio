@@ -14,6 +14,8 @@ TARGET_FPS = 60
 DURATION_SECONDS = 10
 INTERVAL_MS = 1000 // TARGET_FPS
 FRAMES = int(DURATION_SECONDS * TARGET_FPS)
+AXIS_MIN = 0
+AXIS_MAX = 100
 
 
 # --- Debugging ------------------------------------------------------------------------
@@ -100,6 +102,7 @@ def forceatlas2_history(
         jitterTolerance=1.0,
         seed=3,
         verbose=False,
+        backend="vectorized",
     )
     engine.forceatlas2(
         adjacency, pos=start.copy(), iterations=iterations, callbacks=[record]
@@ -109,8 +112,8 @@ def forceatlas2_history(
 
 def fit_to_canvas(
     history: npt.NDArray[np.float64],
-    low: float = 10.0,
-    high: float = 90.0,
+    low: float = AXIS_MIN + 10.0,
+    high: float = AXIS_MAX - 10.0,
 ) -> npt.NDArray[np.float64]:
     """Rescale a position history into fixed axis bounds.
 
@@ -136,7 +139,7 @@ def fit_to_canvas(
 # --- Initialize graph -----------------------------------------------------------------
 fig, ax = create_figure()
 graph_data: dict[str, Iterable[str]] = load_graph_data()
-G = GraphView(fig, ax, nx.DiGraph(graph_data), axis_lim=(0, 100), spawn_margin=20)
+G = GraphView(fig, ax, nx.DiGraph(graph_data), axis_lim=(AXIS_MIN, AXIS_MAX), spawn_margin=20)
 
 # --- Main  ----------------------------------------------------------------------------
 history = fit_to_canvas(forceatlas2_history(G.graph, G.pos, FRAMES))
@@ -152,6 +155,7 @@ def animate(frame: int):
         The node and edge artists for blitting.
     """
     G.pos = history[min(frame, len(history) - 1)]
+
     return G.get_artists()
 
 
