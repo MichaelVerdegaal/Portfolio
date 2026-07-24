@@ -139,6 +139,21 @@ class GraphView:
         self._pos = new_pos
         self.refresh()
 
+    def layout_from(
+        self, layout: dict[int, tuple[float, float] | npt.ArrayLike]
+    ) -> None:
+        """Accept a finished NetworkX layout dict and apply it via the pos setter.
+
+        NetworkX layout functions (nx.circular_layout, nx.spring_layout, etc.)
+        return {node: (x, y)} dicts keyed by the original node labels.  After
+        the integer relabel in __init__, node id == row in the position array,
+        so the dict values can be stacked directly into an (N, 2) array.
+
+        Args:
+            layout: A {node: (x, y)} dict as returned by nx.layout_*.
+        """
+        self.pos = np.array(list(layout.values()))
+
     def refresh(self) -> None:
         """Push the current position array into the Matplotlib collections.
 

@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "fa2>=1.1.2",
     "fastapi[standard-no-fastapi-cloud-cli]>=0.137.2",
     "matplotlib==3.10.8",
     "networkx>=3.6.1",
@@ -15,7 +16,6 @@ dependencies = [
 [tool.ruff.lint]
 # Defaults (E4/E7/E9, F) plus import sorting (I), bugbear (B), and pyupgrade (UP).
 extend-select = ["I", "B", "UP"]
-
 
 [build-system]
 requires = ["hatchling"]
