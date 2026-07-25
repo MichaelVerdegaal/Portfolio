@@ -20,30 +20,43 @@ AXIS_MAX = 100
 
 
 # --- Layout ---------------------------------------------------------------------------
-def fit_to_canvas(
-    history: npt.NDArray[np.float64],
-    low: float = AXIS_MIN + 10.0,
-    high: float = AXIS_MAX - 10.0,
-) -> npt.NDArray[np.float64]:
-    """Rescale a position history into fixed axis bounds.
-
-    ForceAtlas2 layouts live on an arbitrary scale, so each frame is
-    uniformly scaled (aspect preserved) and centered to fit the canvas.
+def rescale_uniform(coords: np.ndarray, lo: float, hi: float) -> np.ndarray:
+    """Rescale a set of 2D/3D coordinates to fit within [lo, hi] uniformly.
 
     Args:
-        history: (frames, N, 2) position array.
-        low: Lower axis bound the layout should fit inside.
-        high: Upper axis bound the layout should fit inside.
+        coords: An (N, 2) or (N, 3) array of coordinates.
+        lo: The lower bound of the target range.
+        hi: The upper bound of the target range.
 
     Returns:
-        A rescaled (frames, N, 2) array within [low, high].
+        An (N, 2) or (N, 3) array of rescaled coordinates within [lo, hi].
     """
-    mins = history.min(axis=1, keepdims=True)  # (frames, 1, 2)
-    maxs = history.max(axis=1, keepdims=True)
-    span = np.maximum((maxs - mins).max(axis=2, keepdims=True), 1e-9)  # (frames, 1, 1)
-    scale = (high - low) / span
-    center = (mins + maxs) / 2
-    return (history - center) * scale + (low + high) / 2
+    mins = coords.min(axis=0)
+    maxs = coords.max(axis=0)
+    scale = (hi - lo) / max(np.ptp(coords, axis=0).max(), 1e-12)
+    centered = coords - (mins + maxs) / 2.0
+    return centered * scale + (lo + hi) / 2.0
+
+
+def layout_function(graph_view: GraphView) -> npt.NDArray[np.float64]:
+    """Compute a target layout for the graph using ForceAtlas2.
+
+    Args:
+        graph_view: The GraphView instance containing the graph and its current positions.
+
+    Returns:
+        An (N, 2) array of target positions for the graph nodes.
+    """
+    pos = graph_view.pos.copy()
+    G_sparse = nx.to_scipy_sparse_array(graph_view.graph.to_undirected())
+
+    fa2: ForceAtlas2 = ForceAtlas2.inferSettings(
+        G_sparse, seed=3, verbose=False, backend="vectorized"
+    )
+    layout = fa2.forceatlas2(G_sparse, pos=pos, iterations=100)
+
+    layout_np = np.array(layout)
+    return rescale_uniform(layout_np, AXIS_MIN + 10.0, AXIS_MAX - 10.0)
 
 
 # --- Initialize graph -----------------------------------------------------------------
@@ -55,21 +68,8 @@ G = GraphView(
 
 # --- Main  ----------------------------------------------------------------------------
 start = G.pos.copy()
-undirected = G.graph.to_undirected()
-
-fa2 = ForceAtlas2.inferSettings(
-    undirected,
-    seed=3,
-    verbose=False,
-    backend="vectorized",
-)
-layout = fa2.forceatlas2_networkx_layout(
-    undirected,
-    pos={n: start[n] for n in undirected},
-    iterations=100,
-)
-target = fit_to_canvas(np.array([layout[n] for n in G.graph])[np.newaxis, ...])[0]
-history = tween_history(start, target, FRAMES)
+final_layout = layout_function(G)
+history = tween_history(start, final_layout, FRAMES)
 
 
 def animate(frame: int):
