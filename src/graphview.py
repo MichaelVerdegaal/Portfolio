@@ -175,11 +175,7 @@ class GraphView:
         created; the existing scatter and line collection are updated.
         """
         if self._pos.shape[1] == 3:
-            self._scatter._offsets3d = (
-                self._pos[:, 0],
-                self._pos[:, 1],
-                self._pos[:, 2],
-            )
+            self._scatter._offsets3d = tuple(self._pos.T)
         else:
             self._scatter.set_offsets(self._pos)
 

@@ -9,7 +9,7 @@ from matplotlib.animation import FuncAnimation
 
 from src.animate import tween_history
 from src.graphview import GraphView, load_graph_data
-from src.mpl_utils import create_figure
+from src.mpl_utils import create_figure_3d
 
 TARGET_FPS = 60
 DURATION_SECONDS = 10
@@ -62,7 +62,7 @@ def layout_function(graph_view: GraphView, is_3d: bool) -> npt.NDArray[np.float6
 
 # --- Initialize graph -----------------------------------------------------------------
 
-fig, ax = create_figure(is_3d=IS_3D)
+fig, ax = create_figure_3d()
 graph_data: dict[str, Iterable[str]] = load_graph_data()
 G = GraphView(
     fig,
