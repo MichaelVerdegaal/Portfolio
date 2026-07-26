@@ -5,6 +5,7 @@ import tkinter
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from mpl_toolkits.mplot3d import axes3d
 
 # Color constants
 COLOR_BG: str = "#101010"
@@ -51,6 +52,7 @@ def create_figure(
     ylim: tuple[float, float] = (0, 100),
     bg_color: str | None = COLOR_BG,
     disable_axis: bool = True,
+    is_3d: bool = False,
 ) -> tuple[Figure, Axes]:
     """Create a matplotlib figure and axes with specified limits.
 
@@ -59,6 +61,7 @@ def create_figure(
         xlim: Tuple specifying the x-axis limits.
         ylim: Tuple specifying the y-axis limits.
         bg_color: Background color for the figure and axes.
+        is_3d: If True, create a 3D axes; otherwise, create a 2D axes.
 
     Returns:
         A tuple containing the created Figure and Axes objects.
@@ -66,8 +69,13 @@ def create_figure(
     if figsize is None:
         screen_x_inches, screen_y_inches = get_screen_size()
         figsize = (screen_x_inches / 2, screen_y_inches / 2)
-    fig, ax = plt.subplots(figsize=figsize)
-    ax.set(xlim=xlim, ylim=ylim)
+
+    if is_3d:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(1, 1, 1, projection="3d")
+    else:
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.set(xlim=xlim, ylim=ylim)
 
     if bg_color is not None:
         fig.patch.set_facecolor(bg_color)

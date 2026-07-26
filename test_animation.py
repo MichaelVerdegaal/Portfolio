@@ -17,6 +17,7 @@ INTERVAL_MS = 1000 // TARGET_FPS
 FRAMES = int(DURATION_SECONDS * TARGET_FPS)
 AXIS_MIN = 0
 AXIS_MAX = 100
+IS_3D = True
 
 
 # --- Layout ---------------------------------------------------------------------------
@@ -38,20 +39,20 @@ def rescale_uniform(coords: np.ndarray, lo: float, hi: float) -> np.ndarray:
     return centered * scale + (lo + hi) / 2.0
 
 
-def layout_function(graph_view: GraphView) -> npt.NDArray[np.float64]:
+def layout_function(graph_view: GraphView, is_3d: bool) -> npt.NDArray[np.float64]:
     """Compute a target layout for the graph using ForceAtlas2.
 
     Args:
         graph_view: The GraphView instance containing the graph and its current positions.
 
     Returns:
-        An (N, 2) array of target positions for the graph nodes.
+        An (N, 2) | (N, 3) array of target positions for the graph nodes.
     """
     pos = graph_view.pos.copy()
     G_sparse = nx.to_scipy_sparse_array(graph_view.graph.to_undirected())
 
     fa2: ForceAtlas2 = ForceAtlas2.inferSettings(
-        G_sparse, seed=3, verbose=False, backend="vectorized"
+        G_sparse, seed=3, verbose=False, backend="vectorized", dim=3 if is_3d else None
     )
     layout = fa2.forceatlas2(G_sparse, pos=pos, iterations=100)
 
@@ -60,15 +61,21 @@ def layout_function(graph_view: GraphView) -> npt.NDArray[np.float64]:
 
 
 # --- Initialize graph -----------------------------------------------------------------
-fig, ax = create_figure()
+
+fig, ax = create_figure(is_3d=IS_3D)
 graph_data: dict[str, Iterable[str]] = load_graph_data()
 G = GraphView(
-    fig, ax, nx.DiGraph(graph_data), axis_lim=(AXIS_MIN, AXIS_MAX), spawn_margin=20
+    fig,
+    ax,
+    nx.DiGraph(graph_data),
+    axis_lim=(AXIS_MIN, AXIS_MAX),
+    spawn_margin=20,
+    is_3d=IS_3D,
 )
 
 # --- Main  ----------------------------------------------------------------------------
 start = G.pos.copy()
-final_layout = layout_function(G)
+final_layout = layout_function(G, IS_3D)
 history = tween_history(start, final_layout, FRAMES)
 
 
@@ -86,8 +93,15 @@ def animate(frame: int):
     return G.get_artists()
 
 
+# Blitting has limited support with Axes3D
+enable_blitting: bool = False if IS_3D else True
 anim = FuncAnimation(
-    fig, func=animate, interval=INTERVAL_MS, frames=FRAMES, repeat=False, blit=True
+    fig,
+    func=animate,
+    interval=INTERVAL_MS,
+    frames=FRAMES,
+    repeat=False,
+    blit=enable_blitting,
 )
 # save animation as mp4
 # anim.save("animation.mp4", writer="ffmpeg")

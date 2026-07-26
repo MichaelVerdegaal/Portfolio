@@ -1,15 +1,17 @@
 from collections.abc import Iterable
-
+from mpl_toolkits.mplot3d.axes3d import Axes3D
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
 import yaml
 from matplotlib.axes import Axes
+from mpl_toolkits.mplot3d.art3d import Path3DCollection
 from matplotlib.collections import LineCollection, PathCollection
 from matplotlib.figure import Figure
 from matplotlib.font_manager import FontProperties
 from matplotlib.textpath import TextPath
 from matplotlib.transforms import Affine2D
+from mpl_toolkits.mplot3d.art3d import Line3DCollection
 from numpy import float64
 from numpy._typing._array_like import NDArray
 
@@ -49,12 +51,12 @@ class GraphView:
     def __init__(
         self,
         fig: Figure,
-        ax: Axes,
+        ax: Axes | Axes3D,
         graph: nx.DiGraph,
         *,
         axis_lim: tuple[int, int] = (0, 100),
         spawn_margin: int = 20,
-        rng: np.random.Generator | None = None,
+        is_3d: bool = False,
     ) -> None:
         """Initialise GraphView with a figure, axes, and directed graph.
 
@@ -68,8 +70,7 @@ class GraphView:
                 spawn range.
             spawn_margin: Margin subtracted from axis_lim to keep spawned
                 nodes away from the edge.
-            rng: Optional random generator for node positions. Defaults to a
-                fixed-seed generator if not provided.
+            is_3d: If true, assumes 3D coordinates and plotting
         """
         self.fig: Figure = fig
         self.ax: Axes = ax
@@ -84,49 +85,62 @@ class GraphView:
         ).reshape(-1, 2)
 
         # Initialize random coordinates for each node
-        rng = rng or np.random.default_rng(3)
+        rng = np.random.default_rng(3)
         low, high = axis_lim[0] + spawn_margin, axis_lim[1] - spawn_margin
         n: int = self.graph.number_of_nodes()
-        self._pos: NDArray[float64] = rng.uniform(low, high, size=(n, 2))
+        coord_dim = (n, 3) if is_3d else (n, 2)
+        self._pos: NDArray[float64] = rng.uniform(low, high, size=coord_dim)
 
         # Create Matplotlib objects for nodes and edges
-        self._scatter: PathCollection = ax.scatter(
-            self._pos[:, 0], self._pos[:, 1], color=COLOR_NODES, zorder=1
-        )
-        self._edge_lines: LineCollection = LineCollection(
-            self._pos[self._edge_idx], color=COLOR_EDGES, linewidths=1, zorder=3
-        )
-        _ = self.ax.add_collection(self._edge_lines)
+        if is_3d:
+            self._scatter: Path3DCollection = ax.scatter(
+                self._pos[:, 0],
+                self._pos[:, 1],
+                self._pos[:, 2],
+                color=COLOR_NODES,
+            )
+            self._edge_lines: Line3DCollection = Line3DCollection(
+                self._pos[self._edge_idx], color=COLOR_EDGES, linewidths=1
+            )
+            _ = self.ax.add_collection3d(self._edge_lines)
+        else:
+            self._scatter: PathCollection = ax.scatter(
+                self._pos[:, 0], self._pos[:, 1], color=COLOR_NODES, zorder=1
+            )
+            self._edge_lines: LineCollection = LineCollection(
+                self._pos[self._edge_idx], color=COLOR_EDGES, linewidths=1, zorder=3
+            )
+            _ = self.ax.add_collection(self._edge_lines)
 
         # Labels above the nodes
-        label_font = FontProperties(size=10)
-        label_paths = []
-        for node in self.graph:
-            text_path = TextPath(
-                (0, 0), str(self.graph.nodes[node]["name"]), prop=label_font
-            )
-            extents = text_path.get_extents()
-            # Anchor: centered horizontally, 4pt above the node
-            anchor = Affine2D().translate(-extents.width / 2 - extents.x0, 4)
-            label_paths.append(anchor.transform_path(text_path))
+        # label_font = FontProperties(size=10)
+        # label_paths = []
+        # for node in self.graph:
+        #     text_path = TextPath(
+        #         (0, 0), str(self.graph.nodes[node]["name"]), prop=label_font
+        #     )
+        #     extents = text_path.get_extents()
+        #     # Anchor: centered horizontally, 4pt above the node
+        #     anchor = Affine2D().translate(-extents.width / 2 - extents.x0, 4)
+        #     label_paths.append(anchor.transform_path(text_path))
 
-        self._label_collection: PathCollection = PathCollection(
-            label_paths,
-            offsets=self._pos,
-            offset_transform=ax.transData,
-            transform=Affine2D().scale(fig.dpi / 72),
-            facecolor="white",
-            edgecolor="white",
-            linewidth=1,
-            joinstyle="round",
-            capstyle="round",
-            zorder=2,
-        )
-        _ = ax.add_collection(self._label_collection)
+        # self._label_collection: PathCollection = PathCollection(
+        #     label_paths,
+        #     offsets=self._pos,
+        #     offset_transform=ax.transData,
+        #     transform=Affine2D().scale(fig.dpi / 72),
+        #     facecolor="white",
+        #     edgecolor="white",
+        #     linewidth=1,
+        #     joinstyle="round",
+        #     capstyle="round",
+        #     zorder=2,
+        # )
+        # _ = ax.add_collection(self._label_collection)
 
     @property
     def pos(self) -> npt.NDArray[np.float64]:
-        """(N, 2) array of current node positions, one row per node."""
+        """(N, 2) | (N, 3) array of current node positions, one row per node."""
         return self._pos
 
     @pos.setter
@@ -134,7 +148,7 @@ class GraphView:
         """Set node positions and update the rendered artists.
 
         Args:
-            new_pos: (N, 2) array of new node positions.
+            new_pos: (N, 2) | (N, 3) array of new node positions.
         """
         self._pos = new_pos
         self.refresh()
@@ -160,16 +174,26 @@ class GraphView:
         Call after making in-place edits to self._pos. No new artists are
         created; the existing scatter and line collection are updated.
         """
-        self._scatter.set_offsets(self._pos)
+        if self._pos.shape[1] == 3:
+            self._scatter._offsets3d = (
+                self._pos[:, 0],
+                self._pos[:, 1],
+                self._pos[:, 2],
+            )
+        else:
+            self._scatter.set_offsets(self._pos)
+
         self._edge_lines.set_segments(self._pos[self._edge_idx])
-        self._label_collection.set_offsets(self._pos)
+
+        if hasattr(self, "_label_collection"):
+            self._label_collection.set_offsets(self._pos)
 
     def move_node(self, node: int, xy: npt.ArrayLike) -> None:
         """Set the position of a single node without refreshing the artists.
 
         Args:
             node: The integer node id (0..N-1).
-            xy: The new (x, y) coordinate for the node.
+            xy: The new (x, y) | (x, y, z) coordinate for the node.
         """
         self._pos[node] = xy
 
@@ -180,7 +204,7 @@ class GraphView:
             node: The integer node id (0..N-1).
 
         Returns:
-            A 1-D array of shape (2,) with the node's x and y coordinates.
+            A 1-D array of shape (2,) | (3,) with the node's coordinates.
         """
         return self._pos[node]
 
@@ -197,11 +221,20 @@ class GraphView:
         """
         nx.set_node_attributes(self.graph, {n: self._pos[n] for n in self.graph}, "pos")
 
-    def get_artists(self) -> tuple[PathCollection, LineCollection, PathCollection]:
+    def get_artists(
+        self,
+    ) -> tuple[PathCollection | Path3DCollection, LineCollection | Line3DCollection]:
         """Return the node and edge artists for use in animation blitting.
 
         Returns:
-            A (PathCollection, LineCollection, PathCollection) tuple with the node scatter,
-            the edge line collection, and the node labels.
+            A (PathCollection, LineCollection) tuple with the node scatter and
+            the edge line collection. Includes the label collection if labels
+            are enabled.
         """
-        return (self._scatter, self._edge_lines, self._label_collection)
+        artists: tuple[
+            PathCollection | Path3DCollection,
+            LineCollection | Line3DCollection,
+        ] = (self._scatter, self._edge_lines)
+        if hasattr(self, "_label_collection"):
+            artists = artists + (self._label_collection,)
+        return artists
