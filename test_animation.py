@@ -9,7 +9,7 @@ from matplotlib.animation import FuncAnimation
 
 from src.animate import tween_history
 from src.graphview import GraphView, load_graph_data
-from src.mpl_utils import create_figure_3d
+from src.mpl_utils import create_figure, create_figure_3d
 
 TARGET_FPS = 60
 DURATION_SECONDS = 10
@@ -52,7 +52,7 @@ def layout_function(graph_view: GraphView, is_3d: bool) -> npt.NDArray[np.float6
     G_sparse = nx.to_scipy_sparse_array(graph_view.graph.to_undirected())
 
     fa2: ForceAtlas2 = ForceAtlas2.inferSettings(
-        G_sparse, seed=3, verbose=False, backend="vectorized", dim=3 if is_3d else None
+        G_sparse, seed=3, verbose=False, backend="vectorized", dim=3 if is_3d else 2
     )
     layout = fa2.forceatlas2(G_sparse, pos=pos, iterations=100)
 
@@ -62,7 +62,7 @@ def layout_function(graph_view: GraphView, is_3d: bool) -> npt.NDArray[np.float6
 
 # --- Initialize graph -----------------------------------------------------------------
 
-fig, ax = create_figure_3d()
+fig, ax = create_figure_3d() if IS_3D else create_figure()
 graph_data: dict[str, Iterable[str]] = load_graph_data()
 G = GraphView(
     fig,
