@@ -15,6 +15,7 @@ from matplotlib.transforms import Affine2D
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 from numpy import float64
 from numpy._typing._array_like import NDArray
+from matplotlib.colors import to_rgba
 
 from src.mpl_utils import COLOR_EDGES, COLOR_NODES
 
@@ -41,18 +42,14 @@ def load_graph_data() -> dict[str, Iterable[str]]:
             adjacency[entry] = []
     return adjacency
 
-
 class TextPathCollection3D(PathCollection):
-    """Glyph outline paths anchored at 3D data coordinates.
-
-    Path i is drawn at the projection of positions[i], so paths keep their
-    pairing with the nodes. Projection runs at draw time.
-    """
-
     def __init__(
         self,
         paths: list[Path],
         positions: npt.NDArray[np.float64],
+        *,
+        color: str = "white",
+        alpha_range: tuple[float, float] = (0.3, 1.0),
         **kwargs: object,
     ) -> None:
         """Initialise the collection with per-label paths and 3D anchors.
@@ -60,10 +57,30 @@ class TextPathCollection3D(PathCollection):
         Args:
             paths: One glyph path per label, in node order.
             positions: (N, 3) array of anchor points in data coordinates.
+            color: Base colour for the glyph fill and stroke.
+            alpha_range: (far, near) alpha applied across the depth range.
             **kwargs: Styling forwarded to PathCollection.
         """
         super().__init__(paths, offsets=np.zeros((len(paths), 2)), **kwargs)
         self._positions3d: npt.NDArray[np.float64] = positions
+        self._base_rgba: npt.NDArray[np.float64] = np.array(to_rgba(color))
+        self._alpha_range: tuple[float, float] = alpha_range
+
+    def _depth_rgba(self, depth: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+        """Map projected depth to per-label RGBA.
+
+        Args:
+            depth: (N,) projected depths, larger values further from the camera.
+
+        Returns:
+            (N, 4) RGBA array in label order.
+        """
+        span = float(depth.max() - depth.min())
+        far_alpha, near_alpha = self._alpha_range
+        t = np.zeros_like(depth) if span < 1e-12 else (depth - depth.min()) / span
+        rgba = np.tile(self._base_rgba, (len(depth), 1))
+        rgba[:, 3] = near_alpha - t * (near_alpha - far_alpha)
+        return rgba
 
     def set_positions(self, positions: npt.NDArray[np.float64]) -> None:
         """Replace the 3D anchor points.
@@ -72,22 +89,23 @@ class TextPathCollection3D(PathCollection):
             positions: (N, 3) array of anchor points in data coordinates.
         """
         self._positions3d = positions
-
+        
     def do_3d_projection(self) -> float:
-        """Project the anchors into the axes' 2D space and report depth.
-
-        Returns:
-            Depth of the nearest anchor, used by Axes3D to order artists
-            when computed_zorder is enabled.
-        """
         homogeneous = np.column_stack(
             [self._positions3d, np.ones(len(self._positions3d))]
         )
         projected = homogeneous @ self.axes.M.T
         projected = projected[:, :3] / projected[:, 3, None]
         self.set_offsets(projected[:, :2])
-        return float(projected[:, 2].min()) if projected.size else float("nan")
 
+        if not projected.size:
+            return float("nan")
+
+        depth = projected[:, 2]
+        rgba = self._depth_rgba(depth)
+        self.set_facecolor(rgba)
+        self.set_edgecolor(rgba)
+        return float(depth.min())
 
 
 class GraphView:
@@ -202,7 +220,7 @@ class GraphView:
             capstyle="round",
             zorder=2,
         )
-        _ = ax.add_collection(self._label_collection)
+            _ = ax.add_collection(self._label_collection)
 
     @property
     def pos(self) -> npt.NDArray[np.float64]:
