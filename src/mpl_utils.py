@@ -6,8 +6,9 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from matplotlib.projections import register_projection
+from matplotlib.transforms import Bbox
 from mpl_toolkits.mplot3d.axes3d import Axes3D
-
 
 # Color constants
 COLOR_BG: str = "#101010"
@@ -16,6 +17,24 @@ COLOR_EDGES: str = "#bbb9b2"
 
 # Matplotlib config
 mpl.rcParams["toolbar"] = "none"
+
+
+class WideAxes3D(Axes3D):
+    """Axes3D that keeps its full rectangle instead of shrinking to a square.
+
+    Axes3D.apply_aspect re-fits the axes to a square on every draw, which
+    letterboxes the scene in a widescreen figure.
+    """
+
+    name = "wide3d"
+
+    def apply_aspect(self, position: Bbox | None = None) -> None:
+        if position is None:
+            position = self.get_position(original=True)
+        self._set_position(position, "active")
+
+
+register_projection(WideAxes3D)
 
 
 def maximize_window(fig: Figure, fullscreen: bool = True) -> None:
@@ -133,7 +152,7 @@ def create_figure_3d(
     fig = plt.figure(figsize=figsize)
     # Fixed draw order is stable across camera angles and avoids z-fighting
     # between edges and nodes that automatic depth sorting can't resolve.
-    ax: Axes3D = fig.add_subplot(projection="3d", computed_zorder=False)
+    ax: Axes3D = fig.add_subplot(projection="wide3d", computed_zorder=False)
     ax.set(xlim=xlim, ylim=ylim, zlim=zlim)
     ax.set_box_aspect((1, 1, 1))
     ax.set_proj_type("persp", focal_length=0.6)
