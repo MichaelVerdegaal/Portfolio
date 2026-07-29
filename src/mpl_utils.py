@@ -2,6 +2,7 @@ import ctypes
 import sys
 import tkinter
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
@@ -11,6 +12,9 @@ from mpl_toolkits.mplot3d.axes3d import Axes3D
 COLOR_BG: str = "#101010"
 COLOR_NODES: str = "#ff8f40"
 COLOR_EDGES: str = "#bbb9b2"
+
+# Matplotlib config
+mpl.rcParams["toolbar"] = "none"
 
 
 def get_screen_size(dpi: int = 100) -> tuple[float, float]:
@@ -46,21 +50,19 @@ def get_screen_size(dpi: int = 100) -> tuple[float, float]:
     return width_px / dpi, height_px / dpi
 
 
-def create_figure(
+def create_figure_2d(
     figsize: tuple[float, float] | None = None,
     xlim: tuple[float, float] = (0, 100),
     ylim: tuple[float, float] = (0, 100),
     bg_color: str | None = COLOR_BG,
-    is_3d: bool = False,
 ) -> tuple[Figure, Axes]:
-    """Create a matplotlib figure and axes with specified limits.
+    """Create a 2D matplotlib figure and axes with specified limits.
 
     Args:
         figsize: Optional tuple specifying the figure size in inches.
         xlim: Tuple specifying the x-axis limits.
         ylim: Tuple specifying the y-axis limits.
         bg_color: Background color for the figure and axes.
-        is_3d: If True, create a 3D axes; otherwise, create a 2D axes.
 
     Returns:
         A tuple containing the created Figure and Axes objects.
@@ -69,13 +71,9 @@ def create_figure(
         screen_x_inches, screen_y_inches = get_screen_size()
         figsize = (screen_x_inches / 2, screen_y_inches / 2)
 
-    if is_3d:
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(1, 1, 1, projection="3d")
-    else:
-        fig, ax = plt.subplots(figsize=figsize)
-        ax.set(xlim=xlim, ylim=ylim)
-        ax.axis("off")
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set(xlim=xlim, ylim=ylim)
+    ax.axis("off")
 
     if bg_color is not None:
         fig.patch.set_facecolor(bg_color)
@@ -90,7 +88,6 @@ def create_figure_3d(
     ylim: tuple[float, float] = (0, 100),
     zlim: tuple[float, float] = (0, 100),
     bg_color: str | None = COLOR_BG,
-    disable_axis: bool = True,
 ) -> tuple[Figure, Axes3D]:
     """Create a matplotlib figure with a 3D axes and specified limits.
 
@@ -100,8 +97,6 @@ def create_figure_3d(
         ylim: Tuple specifying the y-axis limits.
         zlim: Tuple specifying the z-axis limits.
         bg_color: Background color for the figure and axes.
-        disable_axis: Whether to hide axis decorations, including the
-            3D background panes.
 
     Returns:
         A tuple containing the created Figure and Axes3D objects.
@@ -123,9 +118,50 @@ def create_figure_3d(
         fig.patch.set_facecolor(bg_color)
         ax.set_facecolor(bg_color)
 
-    if disable_axis:
-        ax.set_axis_off()
-        for axis in (ax.xaxis, ax.yaxis, ax.zaxis):
-            axis.set_pane_color((0.0, 0.0, 0.0, 0.0))
+    ax.set_axis_off()
+    for axis in (ax.xaxis, ax.yaxis, ax.zaxis):
+        axis.set_pane_color((0.0, 0.0, 0.0, 0.0))
 
     return fig, ax
+
+
+def create_figure(
+    figsize: tuple[float, float] | None = None,
+    xlim: tuple[float, float] = (0, 100),
+    ylim: tuple[float, float] = (0, 100),
+    zlim: tuple[float, float] = (0, 100),
+    bg_color: str | None = COLOR_BG,
+    is_3d: bool = False,
+    disable_axis: bool = True,
+) -> tuple[Figure, Axes | Axes3D]:
+    """Create a matplotlib figure and axes with specified limits.
+
+    Dispatches to ``create_figure_2d`` or ``create_figure_3d`` based on
+    *is_3d*.
+
+    Args:
+        figsize: Optional tuple specifying the figure size in inches.
+        xlim: Tuple specifying the x-axis limits.
+        ylim: Tuple specifying the y-axis limits.
+        zlim: Tuple specifying the z-axis limits (3D only).
+        bg_color: Background color for the figure and axes.
+        is_3d: If True, create a 3D axes; otherwise, create a 2D axes.
+        disable_axis: Whether to hide axis decorations (3D only).
+
+    Returns:
+        A tuple containing the created Figure and Axes objects.
+    """
+    if is_3d:
+        return create_figure_3d(
+            figsize=figsize,
+            xlim=xlim,
+            ylim=ylim,
+            zlim=zlim,
+            bg_color=bg_color,
+        )
+    return create_figure_2d(
+        figsize=figsize,
+        xlim=xlim,
+        ylim=ylim,
+        bg_color=bg_color,
+    )
