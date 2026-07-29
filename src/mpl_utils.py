@@ -8,6 +8,7 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 
+
 # Color constants
 COLOR_BG: str = "#101010"
 COLOR_NODES: str = "#ff8f40"
@@ -15,6 +16,30 @@ COLOR_EDGES: str = "#bbb9b2"
 
 # Matplotlib config
 mpl.rcParams["toolbar"] = "none"
+
+
+def maximize_window(fig: Figure, fullscreen: bool = True) -> None:
+    """Maximise or fullscreen the figure window.
+
+    Args:
+        fig: Figure whose window to resize.
+        fullscreen: If True, go borderless fullscreen; otherwise maximise.
+    """
+    manager = fig.canvas.manager
+    if manager is None:
+        raise RuntimeError(f"backend {plt.get_backend()!r} has no figure manager")
+
+    if fullscreen:
+        manager.full_screen_toggle()
+        return
+
+    backend = plt.get_backend().lower()
+    if "qt" in backend:
+        manager.window.showMaximized()
+    elif "tk" in backend:
+        manager.window.state("zoomed")
+    else:
+        return None
 
 
 def get_screen_size(dpi: int = 100) -> tuple[float, float]:
@@ -132,7 +157,6 @@ def create_figure(
     zlim: tuple[float, float] = (0, 100),
     bg_color: str | None = COLOR_BG,
     is_3d: bool = False,
-    disable_axis: bool = True,
 ) -> tuple[Figure, Axes | Axes3D]:
     """Create a matplotlib figure and axes with specified limits.
 

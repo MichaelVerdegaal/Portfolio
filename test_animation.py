@@ -9,7 +9,7 @@ from matplotlib.animation import FuncAnimation
 
 from src.animate import tween_history
 from src.graphview import GraphView, load_graph_data
-from src.mpl_utils import create_figure
+from src.mpl_utils import create_figure, maximize_window
 
 TARGET_FPS = 60
 DURATION_SECONDS = 10
@@ -106,5 +106,5 @@ anim = FuncAnimation(
 # save animation as mp4
 # anim.save("animation.mp4", writer="ffmpeg")
 
-# plt.tight_layout()
+maximize_window(fig)
 plt.show()
