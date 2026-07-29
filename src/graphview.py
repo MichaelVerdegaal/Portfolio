@@ -1,21 +1,21 @@
 from collections.abc import Iterable
-from mpl_toolkits.mplot3d.axes3d import Axes3D
+
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
 import yaml
 from matplotlib.axes import Axes
-from mpl_toolkits.mplot3d.art3d import Path3DCollection
 from matplotlib.collections import LineCollection, PathCollection
-from matplotlib.path import Path
+from matplotlib.colors import to_rgba
 from matplotlib.figure import Figure
 from matplotlib.font_manager import FontProperties
+from matplotlib.path import Path
 from matplotlib.textpath import TextPath
 from matplotlib.transforms import Affine2D
-from mpl_toolkits.mplot3d.art3d import Line3DCollection
+from mpl_toolkits.mplot3d.art3d import Line3DCollection, Path3DCollection
+from mpl_toolkits.mplot3d.axes3d import Axes3D
 from numpy import float64
 from numpy._typing._array_like import NDArray
-from matplotlib.colors import to_rgba
 
 from src.mpl_utils import COLOR_EDGES, COLOR_NODES
 
@@ -41,6 +41,7 @@ def load_graph_data() -> dict[str, Iterable[str]]:
         else:
             adjacency[entry] = []
     return adjacency
+
 
 class TextPathCollection3D(PathCollection):
     def __init__(
@@ -89,7 +90,7 @@ class TextPathCollection3D(PathCollection):
             positions: (N, 3) array of anchor points in data coordinates.
         """
         self._positions3d = positions
-        
+
     def do_3d_projection(self) -> float:
         homogeneous = np.column_stack(
             [self._positions3d, np.ones(len(self._positions3d))]
@@ -192,34 +193,33 @@ class GraphView:
             anchor = Affine2D().translate(-extents.width / 2 - extents.x0, 4)
             label_paths.append(anchor.transform_path(text_path))
 
-
         if self._is_3d:
             self._label_collection = TextPathCollection3D(
-            label_paths,
-            self._pos,
-            offset_transform=ax.transData,
-            transform=Affine2D().scale(fig.dpi / 72),
-            facecolor="white",
-            edgecolor="white",
-            linewidth=1,
-            joinstyle="round",
-            capstyle="round",
-            zorder=3,
-        )
+                label_paths,
+                self._pos,
+                offset_transform=ax.transData,
+                transform=Affine2D().scale(fig.dpi / 72),
+                facecolor="white",
+                edgecolor="white",
+                linewidth=1,
+                joinstyle="round",
+                capstyle="round",
+                zorder=3,
+            )
             _ = ax.add_collection(self._label_collection, autolim=False)
         else:
             self._label_collection: PathCollection = PathCollection(
-            label_paths,
-            offsets=self._pos[:, :2],
-            offset_transform=ax.transData,
-            transform=Affine2D().scale(fig.dpi / 72),
-            facecolor="white",
-            edgecolor="white",
-            linewidth=1,
-            joinstyle="round",
-            capstyle="round",
-            zorder=2,
-        )
+                label_paths,
+                offsets=self._pos[:, :2],
+                offset_transform=ax.transData,
+                transform=Affine2D().scale(fig.dpi / 72),
+                facecolor="white",
+                edgecolor="white",
+                linewidth=1,
+                joinstyle="round",
+                capstyle="round",
+                zorder=2,
+            )
             _ = ax.add_collection(self._label_collection)
 
     @property

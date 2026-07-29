@@ -51,7 +51,6 @@ def create_figure(
     xlim: tuple[float, float] = (0, 100),
     ylim: tuple[float, float] = (0, 100),
     bg_color: str | None = COLOR_BG,
-    disable_axis: bool = True,
     is_3d: bool = False,
 ) -> tuple[Figure, Axes]:
     """Create a matplotlib figure and axes with specified limits.
@@ -76,13 +75,11 @@ def create_figure(
     else:
         fig, ax = plt.subplots(figsize=figsize)
         ax.set(xlim=xlim, ylim=ylim)
+        ax.axis("off")
 
     if bg_color is not None:
         fig.patch.set_facecolor(bg_color)
         ax.set_facecolor(bg_color)
-
-    if disable_axis:
-        ax.axis("off")
 
     return fig, ax
 

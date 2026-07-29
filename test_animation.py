@@ -9,7 +9,7 @@ from matplotlib.animation import FuncAnimation
 
 from src.animate import tween_history
 from src.graphview import GraphView, load_graph_data
-from src.mpl_utils import create_figure, create_figure_3d
+from src.mpl_utils import create_figure
 
 TARGET_FPS = 60
 DURATION_SECONDS = 10
@@ -57,12 +57,12 @@ def layout_function(graph_view: GraphView, is_3d: bool) -> npt.NDArray[np.float6
     layout = fa2.forceatlas2(G_sparse, pos=pos, iterations=100)
 
     layout_np = np.array(layout)
-    return rescale_uniform(layout_np, AXIS_MIN + 10.0, AXIS_MAX - 10.0)
+    return rescale_uniform(layout_np, AXIS_MIN + 3, AXIS_MAX - 3)
 
 
 # --- Initialize graph -----------------------------------------------------------------
 
-fig, ax = create_figure_3d() if IS_3D else create_figure()
+fig, ax = create_figure(is_3d=IS_3D)
 graph_data: dict[str, Iterable[str]] = load_graph_data()
 G = GraphView(
     fig,
@@ -106,5 +106,5 @@ anim = FuncAnimation(
 # save animation as mp4
 # anim.save("animation.mp4", writer="ffmpeg")
 
-plt.tight_layout()
+# plt.tight_layout()
 plt.show()
