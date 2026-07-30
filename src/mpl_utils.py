@@ -9,6 +9,7 @@ from matplotlib.figure import Figure
 from matplotlib.projections import register_projection
 from matplotlib.transforms import Bbox
 from mpl_toolkits.mplot3d.axes3d import Axes3D
+import numpy as np
 
 # Color constants
 COLOR_BG: str = "#101010"
@@ -17,7 +18,8 @@ COLOR_EDGES: str = "#bbb9b2"
 
 # Matplotlib config
 mpl.rcParams["toolbar"] = "none"
-
+mpl.rcParams["keymap.fullscreen"] = ["f", "escape"]
+mpl.rcParams["axes3d.automargin"] = False
 
 class WideAxes3D(Axes3D):
     """Axes3D that keeps its full rectangle instead of shrinking to a square.
@@ -35,6 +37,35 @@ class WideAxes3D(Axes3D):
 
 
 register_projection(WideAxes3D)
+
+
+def fit_zoom(
+    ax: Axes3D,
+    positions: npt.NDArray[np.float64],
+    margin: float = 0.06,
+    iterations: int = 3,
+) -> float:
+    """Scale the axes zoom so projected positions fill the visible frame.
+
+    Args:
+        ax: The 3D axes to adjust.
+        positions: (N, 3) array of data coordinates to fit.
+        margin: Fraction of the frame left empty on each side.
+        iterations: Fixed-point passes, since perspective makes this nonlinear.
+
+    Returns:
+        The zoom factor left applied to the axes.
+    """
+    homogeneous = np.column_stack([positions, np.ones(len(positions))])
+    zoom = 1.0
+    for _ in range(iterations):
+        projected = homogeneous @ ax.get_proj().T
+        projected = projected[:, :2] / projected[:, 3, None]
+        used = np.ptp(projected, axis=0)
+        visible = np.array([ax.viewLim.width, ax.viewLim.height]) * (1.0 - 2.0 * margin)
+        zoom *= float(np.min(visible / used))
+        ax.set_box_aspect((1, 1, 1), zoom=zoom)
+    return zoom
 
 
 def maximize_window(fig: Figure, fullscreen: bool = True) -> None:
@@ -60,6 +91,26 @@ def maximize_window(fig: Figure, fullscreen: bool = True) -> None:
     else:
         return None
 
+
+def centered_rect(fig: Figure, target_aspect: float) -> tuple[float, float, float, float]:
+    """Compute a centred axes rect with the given width/height ratio.
+
+    Args:
+        fig: Figure the axes will be added to.
+        target_aspect: Desired axes width / height. Values below the figure's
+            own aspect leave unused strips on the left and right.
+
+    Returns:
+        An (left, bottom, width, height) rect in figure coordinates.
+    """
+    fig_w, fig_h = fig.get_size_inches()
+    fig_aspect = fig_w / fig_h
+    if target_aspect < fig_aspect:
+        width = target_aspect / fig_aspect
+        return ((1.0 - width) / 2.0, 0.0, width, 1.0)
+    height = fig_aspect / target_aspect
+    return (0.0, (1.0 - height) / 2.0, 1.0, height)
+    
 
 def get_screen_size(dpi: int = 100) -> tuple[float, float]:
     """Get the primary screen size in inches.
@@ -150,10 +201,12 @@ def create_figure_3d(
         figsize = (screen_x_inches / 2, screen_y_inches / 2)
 
     fig = plt.figure(figsize=figsize)
-    # Fixed draw order is stable across camera angles and avoids z-fighting
-    # between edges and nodes that automatic depth sorting can't resolve.
-    ax: Axes3D = fig.add_subplot(projection="wide3d", computed_zorder=False)
+    # ax: Axes3D = fig.add_subplot(projection="wide3d", computed_zorder=False)
+    ax: Axes3D = fig.add_axes(
+        centered_rect(fig, 16 / 9), projection="wide3d", computed_zorder=False
+    )
     ax.set(xlim=xlim, ylim=ylim, zlim=zlim)
+    ax.set_xlim3d(0, 100, view_margin=0)
     ax.set_box_aspect((1, 1, 1))
     ax.set_proj_type("persp", focal_length=0.6)
     ax.view_init(elev=18, azim=-60)
