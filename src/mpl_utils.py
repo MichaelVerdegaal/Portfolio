@@ -9,7 +9,6 @@ from matplotlib.figure import Figure
 from matplotlib.projections import register_projection
 from matplotlib.transforms import Bbox
 from mpl_toolkits.mplot3d.axes3d import Axes3D
-import numpy as np
 
 # Color constants
 COLOR_BG: str = "#101010"
@@ -116,19 +115,6 @@ def get_screen_size() -> tuple[float, float]:
     return width_px, height_px
 
 
-def get_aspect_ratio(width: int, height: int) -> tuple[int, int]:
-    """Calculate the aspect ratio of a given width and height.
-
-    Args:
-        width: The width in pixels.
-        height: The height in pixels.
-    Returns:
-        A tuple representing the aspect ratio as (width_ratio, height_ratio).
-    """
-    gcd = np.gcd(width, height)
-    return width // gcd, height // gcd
-
-
 def create_figure_2d(
     figsize: tuple[float, float] | None = None,
     xlim: tuple[float, float] = (0, 100),
@@ -147,8 +133,8 @@ def create_figure_2d(
         A tuple containing the created Figure and Axes objects.
     """
     if figsize is None:
-        screen_x_inches, screen_y_inches = get_screen_size()
-        figsize = (screen_x_inches / 100, screen_y_inches / 100)
+        screen_x_pixels, screen_y_pixels = get_screen_size()
+        figsize = (screen_x_pixels / 100, screen_y_pixels / 100)
 
     fig, ax = plt.subplots(figsize=figsize)
     ax.set(xlim=xlim, ylim=ylim)
@@ -180,14 +166,15 @@ def create_figure_3d(
     Returns:
         A tuple containing the created Figure and Axes3D objects.
     """
+    aspect_ratio = 16 / 9
     if figsize is None:
-        screen_x_inches, screen_y_inches = get_screen_size()
-        figsize = (screen_x_inches / 100, screen_y_inches / 100)
+        screen_x_pixels, screen_y_pixels = get_screen_size()
+        aspect_ratio = screen_x_pixels / screen_y_pixels
+        figsize = (screen_x_pixels / 100, screen_y_pixels / 100)
 
     fig = plt.figure(figsize=figsize)
-    # ax: Axes3D = fig.add_subplot(projection="wide3d", computed_zorder=False)
     ax: Axes3D = fig.add_axes(
-        centered_rect(fig, 16 / 10), projection="wide3d", computed_zorder=False
+        centered_rect(fig, aspect_ratio), projection="wide3d", computed_zorder=False
     )
     ax.set(xlim=xlim, ylim=ylim, zlim=zlim)
     ax.set_xlim3d(0, 100, view_margin=0)

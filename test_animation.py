@@ -18,6 +18,8 @@ FRAMES = int(DURATION_SECONDS * TARGET_FPS)
 AXIS_MIN = 0
 AXIS_MAX = 100
 IS_3D = True
+SAVE_ANIM = False
+FULLSCREEN = False
 
 
 # --- Layout ---------------------------------------------------------------------------
@@ -61,8 +63,7 @@ def layout_function(graph_view: GraphView, is_3d: bool) -> npt.NDArray[np.float6
     return rescale_uniform(layout_np, AXIS_MIN + 3, AXIS_MAX - 3)
 
 
-# --- Initialize graph -----------------------------------------------------------------
-
+# --- Main  ----------------------------------------------------------------------------
 fig, ax = create_figure(is_3d=IS_3D)
 graph_data: dict[str, Iterable[str]] = load_graph_data()
 G = GraphView(
@@ -74,14 +75,15 @@ G = GraphView(
     is_3d=IS_3D,
 )
 
-# --- Main  ----------------------------------------------------------------------------
-start = G.pos.copy()
+start_layout = G.pos.copy()
 final_layout = layout_function(G, IS_3D)
-history = tween_history(start, final_layout, FRAMES)
+history = tween_history(start_layout, final_layout, FRAMES)
 
 
 def animate(frame: int):
-    """Show the recorded ForceAtlas2 layout at the given iteration.
+    """Main Matplotlib animation function
+
+    Grabs a frame from the coordinate history for each frame.
 
     Args:
         frame: The current frame index into the position history.
@@ -94,18 +96,16 @@ def animate(frame: int):
     return G.get_artists()
 
 
-# Blitting has limited support with Axes3D
-enable_blitting: bool = False if IS_3D else True
 anim = FuncAnimation(
     fig,
     func=animate,
     interval=INTERVAL_MS,
     frames=FRAMES,
     repeat=False,
-    blit=enable_blitting,
+    blit=False if IS_3D else True,  # Limited support for Axes3D blitting
 )
-# save animation as mp4
-# anim.save("animation.mp4", writer="ffmpeg")
-
-# maximize_window(fig)
+if SAVE_ANIM:
+    anim.save("animation.mp4", writer="ffmpeg")
+if FULLSCREEN:
+    maximize_window(fig)
 plt.show()
