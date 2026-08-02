@@ -3,9 +3,8 @@ from collections.abc import Callable
 import numpy as np
 
 
-# --- History builders: every mode ends as a (frames, N, 2) array ----------------------
 def ease_smoothstep(t: float) -> float:
-    """Cubic bezier easing function for smooth transition.
+    """zsmoothstep easing function for smooth transition.
 
     Args:
         t: A float in [0, 1] representing normalised time.
@@ -27,13 +26,13 @@ def step_history(
     each frame.
 
     Args:
-        start: Initial (N, 2) position array.
-        step_fn: Function that takes the current (N, 2) positions and
-            returns a (N, 2) displacement.
+        start: Initial (N, 2|3) position array.
+        step_fn: Function that takes the current (N, 2|3) positions and
+            returns a (N, 2|3) displacement.
         frames: Number of frames in the output history.
 
     Returns:
-        An array of shape (frames, N, 2) with the position at each frame.
+        An array of shape (frames, N, 2|3) with the position at each frame.
     """
     history = np.empty((frames, *start.shape))
     pos = start.copy()
@@ -55,14 +54,14 @@ def tween_history(
     one-shot computation, not iterative.
 
     Args:
-        start: Initial (N, 2) position array.
-        target: Target (N, 2) position array.
+        start: Initial (N, 2|3) position array.
+        target: Target (N, 2|3) position array.
         frames: Number of frames in the output history.
         ease: Easing function mapping [0, 1] -> [0, 1]. Defaults to
             ease_smoothstep.
 
     Returns:
-        An array of shape (frames, N, 2) with the interpolated position
+        An array of shape (frames, N, 2|3 with the interpolated position
         at each frame.
     """
     t = np.array([ease(i / (frames - 1)) for i in range(frames)])

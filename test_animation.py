@@ -27,12 +27,12 @@ def rescale_uniform(coords: np.ndarray, lo: float, hi: float) -> np.ndarray:
     """Rescale a set of 2D/3D coordinates to fit within [lo, hi] uniformly.
 
     Args:
-        coords: An (N, 2) or (N, 3) array of coordinates.
+        coords: An (N, 2|3) array of coordinates.
         lo: The lower bound of the target range.
         hi: The upper bound of the target range.
 
     Returns:
-        An (N, 2) or (N, 3) array of rescaled coordinates within [lo, hi].
+        An (N, 2|3) array of rescaled coordinates within [lo, hi].
     """
     mins = coords.min(axis=0)
     maxs = coords.max(axis=0)
