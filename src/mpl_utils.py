@@ -21,6 +21,7 @@ mpl.rcParams["toolbar"] = "none"
 mpl.rcParams["keymap.fullscreen"] = ["f", "escape"]
 mpl.rcParams["axes3d.automargin"] = False
 
+
 class WideAxes3D(Axes3D):
     """Axes3D that keeps its full rectangle instead of shrinking to a square.
 
@@ -37,35 +38,6 @@ class WideAxes3D(Axes3D):
 
 
 register_projection(WideAxes3D)
-
-
-def fit_zoom(
-    ax: Axes3D,
-    positions: npt.NDArray[np.float64],
-    margin: float = 0.06,
-    iterations: int = 3,
-) -> float:
-    """Scale the axes zoom so projected positions fill the visible frame.
-
-    Args:
-        ax: The 3D axes to adjust.
-        positions: (N, 3) array of data coordinates to fit.
-        margin: Fraction of the frame left empty on each side.
-        iterations: Fixed-point passes, since perspective makes this nonlinear.
-
-    Returns:
-        The zoom factor left applied to the axes.
-    """
-    homogeneous = np.column_stack([positions, np.ones(len(positions))])
-    zoom = 1.0
-    for _ in range(iterations):
-        projected = homogeneous @ ax.get_proj().T
-        projected = projected[:, :2] / projected[:, 3, None]
-        used = np.ptp(projected, axis=0)
-        visible = np.array([ax.viewLim.width, ax.viewLim.height]) * (1.0 - 2.0 * margin)
-        zoom *= float(np.min(visible / used))
-        ax.set_box_aspect((1, 1, 1), zoom=zoom)
-    return zoom
 
 
 def maximize_window(fig: Figure, fullscreen: bool = True) -> None:
@@ -92,7 +64,9 @@ def maximize_window(fig: Figure, fullscreen: bool = True) -> None:
         return None
 
 
-def centered_rect(fig: Figure, target_aspect: float) -> tuple[float, float, float, float]:
+def centered_rect(
+    fig: Figure, target_aspect: float
+) -> tuple[float, float, float, float]:
     """Compute a centred axes rect with the given width/height ratio.
 
     Args:
@@ -110,16 +84,13 @@ def centered_rect(fig: Figure, target_aspect: float) -> tuple[float, float, floa
         return ((1.0 - width) / 2.0, 0.0, width, 1.0)
     height = fig_aspect / target_aspect
     return (0.0, (1.0 - height) / 2.0, 1.0, height)
-    
 
-def get_screen_size(dpi: int = 100) -> tuple[float, float]:
+
+def get_screen_size() -> tuple[float, float]:
     """Get the primary screen size in inches.
 
-    Args:
-        dpi: Pixels per inch used to convert physical pixels to inches.
-
     Returns:
-        Screen width and height in inches.
+        Screen width and height in pixels.
     """
 
     if sys.platform == "win32":
@@ -142,7 +113,20 @@ def get_screen_size(dpi: int = 100) -> tuple[float, float]:
         height_px = root.winfo_screenheight()
         root.destroy()
 
-    return width_px / dpi, height_px / dpi
+    return width_px, height_px
+
+
+def get_aspect_ratio(width: int, height: int) -> tuple[int, int]:
+    """Calculate the aspect ratio of a given width and height.
+
+    Args:
+        width: The width in pixels.
+        height: The height in pixels.
+    Returns:
+        A tuple representing the aspect ratio as (width_ratio, height_ratio).
+    """
+    gcd = np.gcd(width, height)
+    return width // gcd, height // gcd
 
 
 def create_figure_2d(
@@ -164,7 +148,7 @@ def create_figure_2d(
     """
     if figsize is None:
         screen_x_inches, screen_y_inches = get_screen_size()
-        figsize = (screen_x_inches / 2, screen_y_inches / 2)
+        figsize = (screen_x_inches / 100, screen_y_inches / 100)
 
     fig, ax = plt.subplots(figsize=figsize)
     ax.set(xlim=xlim, ylim=ylim)
@@ -198,12 +182,12 @@ def create_figure_3d(
     """
     if figsize is None:
         screen_x_inches, screen_y_inches = get_screen_size()
-        figsize = (screen_x_inches / 2, screen_y_inches / 2)
+        figsize = (screen_x_inches / 100, screen_y_inches / 100)
 
     fig = plt.figure(figsize=figsize)
     # ax: Axes3D = fig.add_subplot(projection="wide3d", computed_zorder=False)
     ax: Axes3D = fig.add_axes(
-        centered_rect(fig, 16 / 9), projection="wide3d", computed_zorder=False
+        centered_rect(fig, 16 / 10), projection="wide3d", computed_zorder=False
     )
     ax.set(xlim=xlim, ylim=ylim, zlim=zlim)
     ax.set_xlim3d(0, 100, view_margin=0)

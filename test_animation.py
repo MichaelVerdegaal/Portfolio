@@ -9,7 +9,7 @@ from matplotlib.animation import FuncAnimation
 
 from src.animate import tween_history
 from src.graphview import GraphView, load_graph_data
-from src.mpl_utils import create_figure, maximize_window, fit_zoom
+from src.mpl_utils import create_figure, maximize_window
 
 TARGET_FPS = 60
 DURATION_SECONDS = 10
@@ -44,6 +44,7 @@ def layout_function(graph_view: GraphView, is_3d: bool) -> npt.NDArray[np.float6
 
     Args:
         graph_view: The GraphView instance containing the graph and its current positions.
+        is_3d: Whether to compute a 3D layout.
 
     Returns:
         An (N, 2) | (N, 3) array of target positions for the graph nodes.
@@ -76,8 +77,6 @@ G = GraphView(
 # --- Main  ----------------------------------------------------------------------------
 start = G.pos.copy()
 final_layout = layout_function(G, IS_3D)
-# if IS_3D:
-#     fit_zoom(ax, final_layout)
 history = tween_history(start, final_layout, FRAMES)
 
 
