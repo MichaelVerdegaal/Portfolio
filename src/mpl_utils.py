@@ -177,7 +177,7 @@ def create_figure_3d(
         centered_rect(fig, aspect_ratio), projection="wide3d", computed_zorder=False
     )
     ax.set(xlim=xlim, ylim=ylim, zlim=zlim)
-    ax.set_xlim3d(20, 60, view_margin=0)
+    ax.set_xlim3d(0, 100, view_margin=0)
     ax.set_box_aspect((1, 1, 1))
     ax.set_proj_type("persp", focal_length=0.1)
     ax.view_init(elev=30, azim=100)

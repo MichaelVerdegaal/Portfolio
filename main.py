@@ -1,4 +1,4 @@
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -16,6 +16,8 @@ FRAMES = int(DURATION_SECONDS * TARGET_FPS)
 IS_3D = True
 SAVE_ANIM = False
 FULLSCREEN = False
+ELEVATION_ROTATIONS = 0.4
+AZIMUTH_ROTATIONS = 0.4
 
 
 # --- Main  ----------------------------------------------------------------------------
@@ -47,6 +49,14 @@ def animate(frame: int):
         The node and edge artists for blitting.
     """
     G.pos = history[min(frame, len(history) - 1)]
+
+    view_init: Callable[..., None] | None = getattr(ax, "view_init", None)
+    if IS_3D and view_init is not None:
+        progress = frame / max(FRAMES - 1, 1)
+        view_init(
+            elev=30 + 360 * ELEVATION_ROTATIONS * progress,
+            azim=100 + 360 * AZIMUTH_ROTATIONS * progress,
+        )
 
     return G.get_artists()
 
