@@ -1,5 +1,4 @@
 {
-    "python.analysis.stubPath": "./pyscript-stubs",
     "python.languageServer": "None",
     "python.analysis.typeCheckingMode": "off"
 }
