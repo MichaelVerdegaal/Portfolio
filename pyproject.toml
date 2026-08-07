@@ -1,12 +1,11 @@
 [project]
 name = "portfolio"
-version = "0.1.0"
-description = "Add your description here"
+version = "1.0.0"
+description = "3D graph visualizer using Matplotlib"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "fa2>=1.1.2",
-    "fastapi[standard-no-fastapi-cloud-cli]>=0.137.2",
     "loguru>=0.7.3",
     "matplotlib==3.11.1",
     "networkx>=3.6.1",

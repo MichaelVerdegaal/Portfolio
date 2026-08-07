@@ -26,7 +26,7 @@ G = GraphView(
     ax,
     nx.DiGraph(graph_data),
     axis_lim=(AXIS_MIN, AXIS_MAX),
-    spawn_margin=20,
+    spawn_margin=10,
     is_3d=IS_3D,
 )
 
