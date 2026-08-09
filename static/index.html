@@ -3,7 +3,11 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Portfolio</title>
+		<title>Michael Verdegaal - Portfolio</title>
+		<meta
+			name="description"
+			content="Michael Verdegaal - ML/AI Engineer, Software Dev and more!"
+		/>
 		<style>
 			*,
 			*::before,
@@ -19,9 +23,10 @@
 			.hero {
 				position: relative;
 				width: 100%;
-				height: 100vh;
+				height: 100svh;
 				overflow: hidden;
-				background: #101010 url("/static/hero-poster.png") center / cover no-repeat;
+				background: #101010 url("/static/hero-poster.webp") center / cover
+					no-repeat;
 			}
 
 			.hero__video {
@@ -30,10 +35,12 @@
 				width: 100%;
 				height: 100%;
 				object-fit: cover;
+				opacity: 0;
+				transition: opacity 600ms ease;
 			}
 
-			.hero__video--hidden {
-				display: none;
+			.hero__video--visible {
+				opacity: 1;
 			}
 
 			@media (prefers-reduced-motion: reduce) {
@@ -47,55 +54,31 @@
 		<section class="hero">
 			<video
 				class="hero__video"
-				id="intro"
+				id="hero-loop"
 				autoplay
 				muted
-				playsinline
-				controls
-				preload="auto"
-				poster="/static/hero-poster.png"
-			>
-				<source src="/video/hero-intro.mp4" type="video/mp4" />
-			</video>
-			<video
-				class="hero__video hero__video--hidden"
-				id="loop"
-				muted
-				playsinline
 				loop
+				playsinline
 				preload="auto"
+				poster="/static/hero-poster.webp"
 			>
-				<source src="/video/hero-loop.mp4" type="video/mp4" />
+				<source src="/static/hero-loop.mp4" type="video/mp4" />
 			</video>
 		</section>
 
 		<script>
-			const intro = document.getElementById("intro");
-			const loop = document.getElementById("loop");
+			const heroVideo = document.getElementById("hero-loop");
 
-			intro.addEventListener(
-				"ended",
-				() => {
-					loop.play();
-					loop.addEventListener(
-						"playing",
-						() => {
-							loop.classList.remove("hero__video--hidden");
-							intro.classList.add("hero__video--hidden");
-						},
-						{ once: true }
-					);
-				},
+			heroVideo.addEventListener(
+				"playing",
+				() => heroVideo.classList.add("hero__video--visible"),
 				{ once: true }
 			);
 
-			["intro", "loop"].forEach((id) => {
-				const v = document.getElementById(id);
-				v.addEventListener("error", () => console.error(id, "error", v.error));
-				v.addEventListener("stalled", () => console.warn(id, "stalled"));
-				v.addEventListener("waiting", () => console.warn(id, "waiting"));
-				v.play().catch((e) => console.error(id, "play() failed", e));
-			});
+			// Autoplay is blocked by Windows "reduced interactivity" and by iOS low
+			// power mode. The poster is already painted on .hero, so a rejected
+			// play() needs no handling beyond not throwing.
+			heroVideo.play().catch(() => {});
 		</script>
 	</body>
 </html>
