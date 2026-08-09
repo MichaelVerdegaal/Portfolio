@@ -10,10 +10,7 @@ from matplotlib.projections import register_projection
 from matplotlib.transforms import Bbox
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 
-# Color constants
-COLOR_BG: str = "#101010"
-COLOR_NODES: str = "#ff8f40"
-COLOR_EDGES: str = "#bbb9b2"
+from src.config import AXIS_MAX, AXIS_MIN, AZIM0, COLOR_BG, ELEV0, FOCAL_LENGTH, ZOOM
 
 # Matplotlib config
 mpl.rcParams["toolbar"] = "none"
@@ -86,7 +83,7 @@ def centered_rect(
 
 
 def get_screen_size() -> tuple[float, float]:
-    """Get the primary screen size in inches.
+    """Get the primary screen size in pixels.
 
     Returns:
         Screen width and height in pixels.
@@ -117,8 +114,8 @@ def get_screen_size() -> tuple[float, float]:
 
 def create_figure_2d(
     figsize: tuple[float, float] | None = None,
-    xlim: tuple[float, float] = (0, 100),
-    ylim: tuple[float, float] = (0, 100),
+    xlim: tuple[float, float] = (AXIS_MIN, AXIS_MAX),
+    ylim: tuple[float, float] = (AXIS_MIN, AXIS_MAX),
     bg_color: str | None = COLOR_BG,
     dpi: float | None = None,
 ) -> tuple[Figure, Axes]:
@@ -151,9 +148,9 @@ def create_figure_2d(
 
 def create_figure_3d(
     figsize: tuple[float, float] | None = None,
-    xlim: tuple[float, float] = (0, 100),
-    ylim: tuple[float, float] = (0, 100),
-    zlim: tuple[float, float] = (0, 100),
+    xlim: tuple[float, float] = (AXIS_MIN, AXIS_MAX),
+    ylim: tuple[float, float] = (AXIS_MIN, AXIS_MAX),
+    zlim: tuple[float, float] = (AXIS_MIN, AXIS_MAX),
     bg_color: str | None = COLOR_BG,
     dpi: float | None = None,
 ) -> tuple[Figure, Axes3D]:
@@ -181,10 +178,10 @@ def create_figure_3d(
         centered_rect(fig, aspect_ratio), projection="wide3d", computed_zorder=False
     )
     ax.set(xlim=xlim, ylim=ylim, zlim=zlim)
-    ax.set_xlim3d(0, 100, view_margin=0)
-    ax.set_box_aspect((1, 1, 1))
-    ax.set_proj_type("persp", focal_length=0.1)
-    ax.view_init(elev=30, azim=100)
+    ax.set_xlim3d(*xlim, view_margin=0)
+    ax.set_box_aspect((1, 1, 1), zoom=ZOOM)
+    ax.set_proj_type("persp", focal_length=FOCAL_LENGTH)
+    ax.view_init(elev=ELEV0, azim=AZIM0)
 
     if bg_color is not None:
         fig.patch.set_facecolor(bg_color)
@@ -199,9 +196,9 @@ def create_figure_3d(
 
 def create_figure(
     figsize: tuple[float, float] | None = None,
-    xlim: tuple[float, float] = (0, 100),
-    ylim: tuple[float, float] = (0, 100),
-    zlim: tuple[float, float] = (0, 100),
+    xlim: tuple[float, float] = (AXIS_MIN, AXIS_MAX),
+    ylim: tuple[float, float] = (AXIS_MIN, AXIS_MAX),
+    zlim: tuple[float, float] = (AXIS_MIN, AXIS_MAX),
     bg_color: str | None = COLOR_BG,
     is_3d: bool = False,
     dpi: float | None = None,

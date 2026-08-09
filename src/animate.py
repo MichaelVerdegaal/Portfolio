@@ -4,7 +4,7 @@ import numpy as np
 
 
 def ease_smoothstep(t: float) -> float:
-    """zsmoothstep easing function for smooth transition.
+    """Smoothstep easing function for smooth transition.
 
     Args:
         t: A float in [0, 1] representing normalised time.

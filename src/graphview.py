@@ -14,10 +14,8 @@ from matplotlib.textpath import TextPath
 from matplotlib.transforms import Affine2D
 from mpl_toolkits.mplot3d.art3d import Line3DCollection, Path3DCollection
 from mpl_toolkits.mplot3d.axes3d import Axes3D
-from numpy import float64
-from numpy._typing._array_like import NDArray
 
-from src.mpl_utils import COLOR_EDGES, COLOR_NODES
+from src.config import COLOR_EDGES, COLOR_NODES, GRAPH_YAML, RNG_SEED
 
 NodeName = str
 GraphAttr = dict[str, object]
@@ -32,7 +30,7 @@ def load_graph_data() -> dict[str, Iterable[str]]:
     Returns:
         A dictionary mapping each node name to an iterable of its child node names.
     """
-    with open("src/graph.yaml") as file:
+    with GRAPH_YAML.open() as file:
         entries: list[str | dict[str, list[str]]] = yaml.safe_load(file)
     adjacency: dict[str, Iterable[str]] = {}
     for entry in entries:
@@ -154,11 +152,11 @@ class GraphView:
         ).reshape(-1, 2)
 
         # Initialize random coordinates for each node
-        rng = np.random.default_rng(3)
+        rng = np.random.default_rng(RNG_SEED)
         low, high = axis_lim[0] + spawn_margin, axis_lim[1] - spawn_margin
         n: int = self.graph.number_of_nodes()
         coord_dim = (n, 3) if is_3d else (n, 2)
-        self._pos: NDArray[float64] = rng.uniform(low, high, size=coord_dim)
+        self._pos: npt.NDArray[np.float64] = rng.uniform(low, high, size=coord_dim)
 
         # Create Matplotlib objects for nodes and edges
         if is_3d:
