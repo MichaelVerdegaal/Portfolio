@@ -120,6 +120,7 @@ def create_figure_2d(
     xlim: tuple[float, float] = (0, 100),
     ylim: tuple[float, float] = (0, 100),
     bg_color: str | None = COLOR_BG,
+    dpi: float | None = None,
 ) -> tuple[Figure, Axes]:
     """Create a 2D matplotlib figure and axes with specified limits.
 
@@ -128,6 +129,7 @@ def create_figure_2d(
         xlim: Tuple specifying the x-axis limits.
         ylim: Tuple specifying the y-axis limits.
         bg_color: Background color for the figure and axes.
+        dpi: Dots per inch for the figure. Defaults to matplotlib rcParams.
 
     Returns:
         A tuple containing the created Figure and Axes objects.
@@ -136,7 +138,7 @@ def create_figure_2d(
         screen_x_pixels, screen_y_pixels = get_screen_size()
         figsize = (screen_x_pixels / 100, screen_y_pixels / 100)
 
-    fig, ax = plt.subplots(figsize=figsize)
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     ax.set(xlim=xlim, ylim=ylim)
     ax.axis("off")
 
@@ -153,6 +155,7 @@ def create_figure_3d(
     ylim: tuple[float, float] = (0, 100),
     zlim: tuple[float, float] = (0, 100),
     bg_color: str | None = COLOR_BG,
+    dpi: float | None = None,
 ) -> tuple[Figure, Axes3D]:
     """Create a matplotlib figure with a 3D axes and specified limits.
 
@@ -160,8 +163,9 @@ def create_figure_3d(
         figsize: Optional tuple specifying the figure size in inches.
         xlim: Tuple specifying the x-axis limits.
         ylim: Tuple specifying the y-axis limits.
-        zlim: Tuple specifying the z-axis limits.
+        zlim: Tuple specifying the z-axis limits (3D only).
         bg_color: Background color for the figure and axes.
+        dpi: Dots per inch for the figure. Defaults to matplotlib rcParams.
 
     Returns:
         A tuple containing the created Figure and Axes3D objects.
@@ -172,7 +176,7 @@ def create_figure_3d(
         aspect_ratio = screen_x_pixels / screen_y_pixels
         figsize = (screen_x_pixels / 100, screen_y_pixels / 100)
 
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure(figsize=figsize, dpi=dpi)
     ax: Axes3D = fig.add_axes(
         centered_rect(fig, aspect_ratio), projection="wide3d", computed_zorder=False
     )
@@ -200,6 +204,7 @@ def create_figure(
     zlim: tuple[float, float] = (0, 100),
     bg_color: str | None = COLOR_BG,
     is_3d: bool = False,
+    dpi: float | None = None,
 ) -> tuple[Figure, Axes | Axes3D]:
     """Create a matplotlib figure and axes with specified limits.
 
@@ -213,7 +218,7 @@ def create_figure(
         zlim: Tuple specifying the z-axis limits (3D only).
         bg_color: Background color for the figure and axes.
         is_3d: If True, create a 3D axes; otherwise, create a 2D axes.
-        disable_axis: Whether to hide axis decorations (3D only).
+        dpi: Dots per inch for the figure. Defaults to matplotlib rcParams.
 
     Returns:
         A tuple containing the created Figure and Axes objects.
@@ -225,10 +230,12 @@ def create_figure(
             ylim=ylim,
             zlim=zlim,
             bg_color=bg_color,
+            dpi=dpi,
         )
     return create_figure_2d(
         figsize=figsize,
         xlim=xlim,
         ylim=ylim,
         bg_color=bg_color,
+        dpi=dpi,
     )
