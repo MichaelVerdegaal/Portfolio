@@ -36,6 +36,14 @@ LABEL_ALPHA_NEAR: float = 1.0
 LABEL_ALPHA_FAR: float = 0.08
 LABEL_FADE_GAMMA: float = 2.2
 
+# Edge falloff. Alpha is INK_EDGE * length_weight * depth_weight. The length
+# weight runs from 1 at the shortest edge to (1 - EDGE_LENGTH_FALLOFF) at the
+# longest; the depth weight uses the same curve shape as the labels.
+EDGE_LENGTH_FALLOFF: float = 0.75
+EDGE_ALPHA_NEAR: float = 1.0
+EDGE_ALPHA_FAR: float = 0.15
+EDGE_FADE_GAMMA: float = 1.6
+
 # Flat colours for the 2D path only. The 3D path builds per-element RGBA.
 COLOR_NODES: str = COLOR_ACCENT
 COLOR_EDGES: str = COLOR_INK

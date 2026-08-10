@@ -20,6 +20,10 @@ from src.config import (
     COLOR_EDGES,
     COLOR_INK,
     COLOR_NODES,
+    EDGE_ALPHA_FAR,
+    EDGE_ALPHA_NEAR,
+    EDGE_FADE_GAMMA,
+    EDGE_LENGTH_FALLOFF,
     GRAPH_YAML,
     INK_EDGE,
     LABEL_ALPHA_FAR,
@@ -123,6 +127,79 @@ class TextPathCollection3D(PathCollection):
         return float(depth.min())
 
 
+class EdgeCollection3D(Line3DCollection):
+    """Line3DCollection whose per-edge alpha falls off with length and depth.
+
+    Depth is only known once the axes projection matrix is applied, so the
+    colours are rebuilt inside do_3d_projection rather than at construction.
+    """
+
+    def __init__(
+        self,
+        segments: npt.NDArray[np.float64],
+        *,
+        color: str,
+        base_alpha: float,
+        length_falloff: float,
+        depth_range: tuple[float, float],
+        gamma: float,
+        **kwargs: object,
+    ) -> None:
+        """Initialise the collection with segments and falloff parameters.
+
+        Args:
+            segments: (E, 2, 3) array of edge endpoints in data coordinates.
+            color: Base colour for every edge.
+            base_alpha: Alpha applied before the length and depth weights.
+            length_falloff: Fraction of alpha removed from the longest edge.
+            depth_range: (far, near) depth weights.
+            gamma: Exponent on the depth curve.
+            **kwargs: Styling forwarded to Line3DCollection.
+        """
+        super().__init__(segments, **kwargs)
+        self._base_rgb: npt.NDArray[np.float64] = np.array(to_rgba(color))[:3]
+        self._base_alpha: float = base_alpha
+        self._length_falloff: float = length_falloff
+        self._depth_range: tuple[float, float] = depth_range
+        self._gamma: float = gamma
+        self._midpoints: npt.NDArray[np.float64] = segments.mean(axis=1)
+        self._length_weights: npt.NDArray[np.float64] = np.ones(len(segments))
+
+    def set_geometry(self, segments: npt.NDArray[np.float64]) -> None:
+        """Recompute midpoints and length weights from new segments.
+
+        Args:
+            segments: (E, 2, 3) array of edge endpoints in data coordinates.
+        """
+        self._midpoints = segments.mean(axis=1)
+        lengths = np.linalg.norm(segments[:, 1] - segments[:, 0], axis=1)
+        span = float(lengths.max() - lengths.min())
+        if span < 1e-12:
+            self._length_weights = np.ones(len(lengths))
+            return
+        normalized = (lengths - lengths.min()) / span
+        self._length_weights = 1.0 - self._length_falloff * normalized
+
+    def do_3d_projection(self) -> float:
+        minz = super().do_3d_projection()
+
+        homogeneous = np.column_stack(
+            [self._midpoints, np.ones(len(self._midpoints))]
+        )
+        projected = homogeneous @ self.axes.M.T
+        depth = projected[:, 2] / projected[:, 3]
+
+        span = float(depth.max() - depth.min())
+        t = np.zeros_like(depth) if span < 1e-12 else (depth - depth.min()) / span
+        far_alpha, near_alpha = self._depth_range
+        depth_weight = far_alpha + (near_alpha - far_alpha) * (1.0 - t) ** self._gamma
+
+        rgba = np.tile(np.append(self._base_rgb, 1.0), (len(depth), 1))
+        rgba[:, 3] = self._base_alpha * self._length_weights * depth_weight
+        self.set_color(rgba)
+        return minz
+
+
 class GraphView:
     """Renders a fixed-topology DiGraph whose nodes are integers 0..N-1.
 
@@ -182,9 +259,13 @@ class GraphView:
                 self._pos[:, 2],
                 color=to_rgba(COLOR_ACCENT),
             )
-            self._edge_lines: Line3DCollection = Line3DCollection(
+            self._edge_lines: Line3DCollection = EdgeCollection3D(
                 self._pos[self._edge_idx],
-                color=to_rgba(COLOR_INK, INK_EDGE),
+                color=COLOR_INK,
+                base_alpha=INK_EDGE,
+                length_falloff=EDGE_LENGTH_FALLOFF,
+                depth_range=(EDGE_ALPHA_FAR, EDGE_ALPHA_NEAR),
+                gamma=EDGE_FADE_GAMMA,
                 linewidths=1,
             )
             _ = self.ax.add_collection3d(self._edge_lines)
@@ -278,8 +359,10 @@ class GraphView:
         created; the existing scatter and line collection are updated.
         """
         if self._is_3d:
+            segments = self._pos[self._edge_idx]
             self._scatter._offsets3d = tuple(self._pos.T)
-            self._edge_lines.set_segments(self._pos[self._edge_idx])
+            self._edge_lines.set_segments(segments)
+            self._edge_lines.set_geometry(segments)
             self._label_collection.set_positions(self._pos)
         else:
             self._scatter.set_offsets(self._pos)
