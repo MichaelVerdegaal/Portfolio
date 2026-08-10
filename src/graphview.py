@@ -15,7 +15,7 @@ from matplotlib.transforms import Affine2D
 from mpl_toolkits.mplot3d.art3d import Line3DCollection, Path3DCollection
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 
-from src.config import COLOR_EDGES, COLOR_NODES, GRAPH_YAML, RNG_SEED
+from src.config import COLOR_EDGES, COLOR_NODES, GRAPH_YAML, LABEL_FONT_SIZE, RNG_SEED
 
 NodeName = str
 GraphAttr = dict[str, object]
@@ -180,7 +180,7 @@ class GraphView:
             _ = self.ax.add_collection(self._edge_lines)
 
         # Labels above the nodes
-        label_font = FontProperties(size=10)
+        label_font = FontProperties(size=LABEL_FONT_SIZE)
         label_paths = []
         for node in self.graph:
             text_path = TextPath(
