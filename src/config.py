@@ -36,7 +36,7 @@ FOCAL_LENGTH: float = 0.25
 # Every term is sin(2*pi * k * t + phase) with a whole-number k, so the loop closes
 # in both position and velocity. Amplitudes are in degrees. Raising any of these
 # blurs the labels; re-run the motion probe before you do.
-AZIM_AMPLITUDE: float = 22.0  # Sweeps AZIM0 +/- this, one cycle per loop.
+AZIM_AMPLITUDE: float = 16.0  # Sweeps AZIM0 +/- this, one cycle per loop.
 ELEV_AMPLITUDE: float = 7.0  # First harmonic.
 ELEV_AMPLITUDE_3: float = 2.0  # Third harmonic, breaks the metronome feel.
 ELEV_PHASE: float = 1.1  # Radians. Desynchronises elevation from azimuth.
