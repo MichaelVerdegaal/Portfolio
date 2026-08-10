@@ -22,6 +22,9 @@ from src.config import (
     COLOR_NODES,
     GRAPH_YAML,
     INK_EDGE,
+    LABEL_ALPHA_FAR,
+    LABEL_ALPHA_NEAR,
+    LABEL_FADE_GAMMA,
     LABEL_FONT_SIZE,
     RNG_SEED,
 )
@@ -56,8 +59,9 @@ class TextPathCollection3D(PathCollection):
         paths: list[Path],
         positions: npt.NDArray[np.float64],
         *,
-        color: str = "white",
-        alpha_range: tuple[float, float] = (0.3, 1.0),
+        color: str = COLOR_INK,
+        alpha_range: tuple[float, float] = (LABEL_ALPHA_FAR, LABEL_ALPHA_NEAR),
+        gamma: float = LABEL_FADE_GAMMA,
         **kwargs: object,
     ) -> None:
         """Initialise the collection with per-label paths and 3D anchors.
@@ -67,12 +71,15 @@ class TextPathCollection3D(PathCollection):
             positions: (N, 3) array of anchor points in data coordinates.
             color: Base colour for the glyph fill and stroke.
             alpha_range: (far, near) alpha applied across the depth range.
+            gamma: Exponent on the depth curve. Above 1 fades the far labels
+                sooner than a linear ramp would.
             **kwargs: Styling forwarded to PathCollection.
         """
         super().__init__(paths, offsets=np.zeros((len(paths), 2)), **kwargs)
         self._positions3d: npt.NDArray[np.float64] = positions
         self._base_rgba: npt.NDArray[np.float64] = np.array(to_rgba(color))
         self._alpha_range: tuple[float, float] = alpha_range
+        self._gamma: float = gamma
 
     def _depth_rgba(self, depth: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
         """Map projected depth to per-label RGBA.
@@ -87,7 +94,7 @@ class TextPathCollection3D(PathCollection):
         far_alpha, near_alpha = self._alpha_range
         t = np.zeros_like(depth) if span < 1e-12 else (depth - depth.min()) / span
         rgba = np.tile(self._base_rgba, (len(depth), 1))
-        rgba[:, 3] = near_alpha - t * (near_alpha - far_alpha)
+        rgba[:, 3] = far_alpha + (near_alpha - far_alpha) * (1.0 - t) ** self._gamma
         return rgba
 
     def set_positions(self, positions: npt.NDArray[np.float64]) -> None:
@@ -211,8 +218,8 @@ class GraphView:
                 self._pos,
                 offset_transform=ax.transData,
                 transform=Affine2D().scale(fig.dpi / 72),
-                facecolor="white",
-                edgecolor="white",
+                facecolor=COLOR_INK,
+                edgecolor=COLOR_INK,
                 linewidth=1,
                 joinstyle="round",
                 capstyle="round",

@@ -29,6 +29,13 @@ INK_EDGE: float = 0.30
 ACCENT_NODE: float = 0.95
 ACCENT_HALO: float = 0.16
 
+# Label depth falloff. Alpha is far + (near - far) * (1 - t) ** gamma, where t
+# runs 0 at the nearest label to 1 at the furthest. Gamma above 1 pulls the
+# curve down early, so mid-depth labels recede instead of sitting at the midpoint.
+LABEL_ALPHA_NEAR: float = 1.0
+LABEL_ALPHA_FAR: float = 0.08
+LABEL_FADE_GAMMA: float = 2.2
+
 # Flat colours for the 2D path only. The 3D path builds per-element RGBA.
 COLOR_NODES: str = COLOR_ACCENT
 COLOR_EDGES: str = COLOR_INK
