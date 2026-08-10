@@ -13,9 +13,25 @@ STATIC_DIR: Path = PROJECT_ROOT / "static"
 GRAPH_YAML: Path = SRC_DIR / "graph.yaml"
 
 # --- Colours --------------------------------------------------------------------------
-COLOR_BG: str = "#101010"
-COLOR_NODES: str = "#ff8f40"
-COLOR_EDGES: str = "#bbb9b2"
+# Three colours. Everything drawn is one of them at a stated alpha, so there is
+# one knob per colour rather than one per element. Neither end is pure: the ink
+# is warm and the base leans very slightly green, which stops the scene reading
+# as default terminal black-on-white.
+COLOR_BG: str = "#0f1010"
+COLOR_INK: str = "#f4f2ee"
+COLOR_ACCENT: str = "#ff8f40"
+
+# Ink alpha ramp.
+INK_NODE: float = 0.48
+INK_EDGE: float = 0.30
+
+# Accent alpha ramp.
+ACCENT_NODE: float = 0.95
+ACCENT_HALO: float = 0.16
+
+# Flat colours for the 2D path only. The 3D path builds per-element RGBA.
+COLOR_NODES: str = COLOR_ACCENT
+COLOR_EDGES: str = COLOR_INK
 
 # --- Scene bounds and layout ----------------------------------------------------------
 AXIS_MIN: int = 0

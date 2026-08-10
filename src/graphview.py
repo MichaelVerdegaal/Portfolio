@@ -15,7 +15,16 @@ from matplotlib.transforms import Affine2D
 from mpl_toolkits.mplot3d.art3d import Line3DCollection, Path3DCollection
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 
-from src.config import COLOR_EDGES, COLOR_NODES, GRAPH_YAML, LABEL_FONT_SIZE, RNG_SEED
+from src.config import (
+    COLOR_ACCENT,
+    COLOR_EDGES,
+    COLOR_INK,
+    COLOR_NODES,
+    GRAPH_YAML,
+    INK_EDGE,
+    LABEL_FONT_SIZE,
+    RNG_SEED,
+)
 
 NodeName = str
 GraphAttr = dict[str, object]
@@ -164,10 +173,12 @@ class GraphView:
                 self._pos[:, 0],
                 self._pos[:, 1],
                 self._pos[:, 2],
-                color=COLOR_NODES,
+                color=to_rgba(COLOR_ACCENT),
             )
             self._edge_lines: Line3DCollection = Line3DCollection(
-                self._pos[self._edge_idx], color=COLOR_EDGES, linewidths=1
+                self._pos[self._edge_idx],
+                color=to_rgba(COLOR_INK, INK_EDGE),
+                linewidths=1,
             )
             _ = self.ax.add_collection3d(self._edge_lines)
         else:
@@ -175,7 +186,10 @@ class GraphView:
                 self._pos[:, 0], self._pos[:, 1], color=COLOR_NODES, zorder=1
             )
             self._edge_lines: LineCollection = LineCollection(
-                self._pos[self._edge_idx], color=COLOR_EDGES, linewidths=1, zorder=3
+                self._pos[self._edge_idx],
+                color=to_rgba(COLOR_EDGES, INK_EDGE),
+                linewidths=1,
+                zorder=3,
             )
             _ = self.ax.add_collection(self._edge_lines)
 
