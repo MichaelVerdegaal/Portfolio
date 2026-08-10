@@ -4,6 +4,7 @@ import networkx as nx
 import numpy as np
 import numpy.typing as npt
 import yaml
+from matplotlib.artist import Artist
 from matplotlib.axes import Axes
 from matplotlib.collections import LineCollection, PathCollection
 from matplotlib.colors import to_rgba
@@ -16,6 +17,9 @@ from mpl_toolkits.mplot3d.art3d import Line3DCollection, Path3DCollection
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 
 from src.config import (
+    ACCENT_HALO,
+    ACCENT_NODE,
+    ACCENT_NODE_COUNT,
     COLOR_ACCENT,
     COLOR_EDGES,
     COLOR_INK,
@@ -25,11 +29,15 @@ from src.config import (
     EDGE_FADE_GAMMA,
     EDGE_LENGTH_FALLOFF,
     GRAPH_YAML,
+    HALO_LINEWIDTH,
+    HALO_SIZE,
     INK_EDGE,
+    INK_NODE,
     LABEL_ALPHA_FAR,
     LABEL_ALPHA_NEAR,
     LABEL_FADE_GAMMA,
     LABEL_FONT_SIZE,
+    NODE_SIZE,
     RNG_SEED,
 )
 
@@ -248,16 +256,37 @@ class GraphView:
         rng = np.random.default_rng(RNG_SEED)
         low, high = axis_lim[0] + spawn_margin, axis_lim[1] - spawn_margin
         n: int = self.graph.number_of_nodes()
+        # Highest-degree nodes get the accent treatment. Degree is stable across
+        # runs, unlike a random pick, so the same nodes are emphasised each render.
+        degrees = np.array([self.graph.degree(node) for node in range(n)])
+        accent_count = min(ACCENT_NODE_COUNT, n)
+        self._accent_mask: npt.NDArray[np.bool_] = np.zeros(n, dtype=bool)
+        self._accent_mask[np.argsort(degrees)[-accent_count:]] = True
         coord_dim = (n, 3) if is_3d else (n, 2)
         self._pos: npt.NDArray[np.float64] = rng.uniform(low, high, size=coord_dim)
 
         # Create Matplotlib objects for nodes and edges
         if is_3d:
+            node_colors = np.tile(to_rgba(COLOR_INK, INK_NODE), (n, 1))
+            node_colors[self._accent_mask] = to_rgba(COLOR_ACCENT, ACCENT_NODE)
             self._scatter: Path3DCollection = ax.scatter(
                 self._pos[:, 0],
                 self._pos[:, 1],
                 self._pos[:, 2],
-                color=to_rgba(COLOR_ACCENT),
+                s=NODE_SIZE,
+                color=node_colors,
+            )
+
+            halo_pos = self._pos[self._accent_mask]
+            self._halo: Path3DCollection = ax.scatter(
+                halo_pos[:, 0],
+                halo_pos[:, 1],
+                halo_pos[:, 2],
+                s=HALO_SIZE,
+                facecolors="none",
+                edgecolors=to_rgba(COLOR_ACCENT, ACCENT_HALO),
+                linewidths=HALO_LINEWIDTH,
+                depthshade=False,
             )
             self._edge_lines: Line3DCollection = EdgeCollection3D(
                 self._pos[self._edge_idx],
@@ -270,6 +299,7 @@ class GraphView:
             )
             _ = self.ax.add_collection3d(self._edge_lines)
         else:
+            self._halo: Path3DCollection | None = None
             self._scatter: PathCollection = ax.scatter(
                 self._pos[:, 0], self._pos[:, 1], color=COLOR_NODES, zorder=1
             )
@@ -363,6 +393,8 @@ class GraphView:
             self._scatter._offsets3d = tuple(self._pos.T)
             self._edge_lines.set_segments(segments)
             self._edge_lines.set_geometry(segments)
+            if self._halo is not None:
+                self._halo._offsets3d = tuple(self._pos[self._accent_mask].T)
             self._label_collection.set_positions(self._pos)
         else:
             self._scatter.set_offsets(self._pos)
@@ -404,15 +436,18 @@ class GraphView:
 
     def get_artists(
         self,
-    ) -> tuple[
-        PathCollection | Path3DCollection,
-        LineCollection | Line3DCollection,
-        PathCollection | Path3DCollection,
-    ]:
+    ) -> tuple[Artist, ...]:
         """Return the node, edge, and label artists for animation blitting.
 
         Returns:
-            A (scatter, edges, labels) tuple with the node scatter, the edge
-            line collection, and the label collection.
+            A tuple containing the node scatter, edge lines, label collection,
+            and optional halo collection.
         """
-        return (self._scatter, self._edge_lines, self._label_collection)
+        artists: tuple[Artist, ...] = (
+            self._scatter,
+            self._edge_lines,
+            self._label_collection,
+        )
+        if self._halo is not None:
+            return (*artists, self._halo)
+        return artists

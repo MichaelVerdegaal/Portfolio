@@ -44,6 +44,13 @@ EDGE_ALPHA_NEAR: float = 1.0
 EDGE_ALPHA_FAR: float = 0.15
 EDGE_FADE_GAMMA: float = 1.6
 
+# Node emphasis. The highest-degree nodes are drawn in accent with a faint ring;
+# everything else is dim ink. The ring is a stroked circle rather than a glow.
+ACCENT_NODE_COUNT: int = 10
+NODE_SIZE: float = 36.0
+HALO_SIZE: float = 220.0
+HALO_LINEWIDTH: float = 1.0
+
 # Flat colours for the 2D path only. The 3D path builds per-element RGBA.
 COLOR_NODES: str = COLOR_ACCENT
 COLOR_EDGES: str = COLOR_INK
