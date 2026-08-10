@@ -51,6 +51,11 @@ NODE_SIZE: float = 36.0
 HALO_SIZE: float = 220.0
 HALO_LINEWIDTH: float = 1.0
 
+# Per-node size variation. Accent nodes receive a separate fixed scale.
+SIZE_SEED: int = 11
+NODE_SIZE_JITTER: float = 0.3  # Per-node scale is uniform in 1 +/- this.
+ACCENT_SIZE_SCALE: float = 1.4
+
 # Flat colours for the 2D path only. The 3D path builds per-element RGBA.
 COLOR_NODES: str = COLOR_ACCENT
 COLOR_EDGES: str = COLOR_INK

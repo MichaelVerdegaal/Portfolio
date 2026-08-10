@@ -20,6 +20,7 @@ from src.config import (
     ACCENT_HALO,
     ACCENT_NODE,
     ACCENT_NODE_COUNT,
+    ACCENT_SIZE_SCALE,
     COLOR_ACCENT,
     COLOR_EDGES,
     COLOR_INK,
@@ -38,7 +39,9 @@ from src.config import (
     LABEL_FADE_GAMMA,
     LABEL_FONT_SIZE,
     NODE_SIZE,
+    NODE_SIZE_JITTER,
     RNG_SEED,
+    SIZE_SEED,
 )
 
 NodeName = str
@@ -262,6 +265,11 @@ class GraphView:
         accent_count = min(ACCENT_NODE_COUNT, n)
         self._accent_mask: npt.NDArray[np.bool_] = np.zeros(n, dtype=bool)
         self._accent_mask[np.argsort(degrees)[-accent_count:]] = True
+        size_rng = np.random.default_rng(SIZE_SEED)
+        node_sizes = NODE_SIZE * size_rng.uniform(
+            1.0 - NODE_SIZE_JITTER, 1.0 + NODE_SIZE_JITTER, n
+        )
+        node_sizes[self._accent_mask] *= ACCENT_SIZE_SCALE
         coord_dim = (n, 3) if is_3d else (n, 2)
         self._pos: npt.NDArray[np.float64] = rng.uniform(low, high, size=coord_dim)
 
@@ -273,7 +281,7 @@ class GraphView:
                 self._pos[:, 0],
                 self._pos[:, 1],
                 self._pos[:, 2],
-                s=NODE_SIZE,
+                s=node_sizes,
                 color=node_colors,
             )
 
