@@ -164,6 +164,45 @@ def drift_field(node_count: int) -> Callable[[int], NDArray[np.float64]]:
     return offset
 
 
+def breath_field(node_count: int) -> Callable[[int], NDArray[np.float64]]:
+    """Build a per-node opacity field that closes at the loop boundary.
+
+    Each node gets a fixed whole-number harmonic and phase. The waveform uses
+    a short smooth ramp between its dim and bright plateaus, which keeps the
+    opacity change readable without making the graph flicker.
+
+    Args:
+        node_count: Number of nodes in the graph.
+
+    Returns:
+        A function mapping a frame index to an (N,) alpha multiplier array.
+    """
+    rng = np.random.default_rng(config.BREATH_SEED)
+    harmonics = rng.choice(config.BREATH_HARMONICS, size=node_count).astype(float)
+    phases = rng.uniform(0.0, 1.0, node_count)
+    ramp = 0.5 * config.BREATH_DUTY
+
+    def alpha(frame: int) -> NDArray[np.float64]:
+        t = frame / config.LOOP_FRAMES
+        phase = (harmonics * t + phases) % 1.0
+        pulse = np.zeros(node_count)
+
+        rising = phase < ramp
+        rising_t = phase[rising] / ramp
+        pulse[rising] = rising_t**2 * (3.0 - 2.0 * rising_t)
+
+        high = (phase >= ramp) & (phase < 0.5)
+        pulse[high] = 1.0
+
+        falling = (phase >= 0.5) & (phase < 0.5 + ramp)
+        falling_t = (phase[falling] - 0.5) / ramp
+        pulse[falling] = 1.0 - falling_t**2 * (3.0 - 2.0 * falling_t)
+
+        return config.BREATH_FLOOR + (1.0 - config.BREATH_FLOOR) * pulse
+
+    return alpha
+
+
 def render_clip(
     fig: Figure,
     ax: Axes3D,
@@ -172,6 +211,7 @@ def render_clip(
     frames: int,
     pos_for: Callable[[int], NDArray[np.float64]],
     camera_for: Callable[[int], Camera],
+    alpha_for: Callable[[int], NDArray[np.float64]] | None = None,
 ) -> None:
     """Render a clip to MP4 in a single ffmpeg pass.
 
@@ -187,11 +227,14 @@ def render_clip(
         frames: Number of frames to render.
         pos_for: Maps a frame index to an (N, 3) position array.
         camera_for: Maps a frame index to an (elev, azim, roll) tuple.
+        alpha_for: Optional map from frame index to per-node alpha multipliers.
     """
 
     def animate(frame: int) -> list[Artist]:
         elev, azim, roll = camera_for(frame)
         view.pos = pos_for(frame)
+        if alpha_for is not None:
+            view.set_alpha_scale(alpha_for(frame))
         ax.view_init(elev=elev, azim=azim, roll=roll)
         return list(view.get_artists())
 
@@ -240,6 +283,7 @@ def save_poster(
     positions: NDArray[np.float64],
     camera: Camera,
     path: Path,
+    alpha_scale: NDArray[np.float64] | None = None,
 ) -> None:
     """Save a WebP poster matching frame 0 of the loop.
 
@@ -254,9 +298,12 @@ def save_poster(
         positions: The (N, 3) node positions at frame 0, drift included.
         camera: The (elev, azim, roll) tuple at frame 0.
         path: Output .webp path.
+        alpha_scale: Optional per-node alpha multipliers for the poster.
     """
     elev, azim, roll = camera
     view.pos = positions
+    if alpha_scale is not None:
+        view.set_alpha_scale(alpha_scale)
     ax.view_init(elev=elev, azim=azim, roll=roll)
 
     png_path = path.with_suffix(".png")
@@ -278,6 +325,7 @@ def main() -> None:
     spawn_positions = view.pos.copy()
     final_positions = layout_function(view, is_3d=True)
     drift = drift_field(view.graph.number_of_nodes())
+    breath = breath_field(view.graph.number_of_nodes())
 
     if config.RENDER_INTRO:
         history = tween_history(spawn_positions, final_positions, config.INTRO_FRAMES)
@@ -299,6 +347,7 @@ def main() -> None:
         config.LOOP_FRAMES,
         pos_for=lambda frame: final_positions + drift(frame),
         camera_for=loop_camera,
+        alpha_for=breath,
     )
 
     save_poster(
@@ -308,6 +357,7 @@ def main() -> None:
         final_positions + drift(0),
         loop_camera(0),
         config.STATIC_DIR / "hero-poster.webp",
+        alpha_scale=breath(0),
     )
     plt.close(fig)
 

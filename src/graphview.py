@@ -95,6 +95,7 @@ class TextPathCollection3D(PathCollection):
         self._base_rgba: npt.NDArray[np.float64] = np.array(to_rgba(color))
         self._alpha_range: tuple[float, float] = alpha_range
         self._gamma: float = gamma
+        self._alpha_scale: npt.NDArray[np.float64] = np.ones(len(paths))
 
     def _depth_rgba(self, depth: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
         """Map projected depth to per-label RGBA.
@@ -109,8 +110,18 @@ class TextPathCollection3D(PathCollection):
         far_alpha, near_alpha = self._alpha_range
         t = np.zeros_like(depth) if span < 1e-12 else (depth - depth.min()) / span
         rgba = np.tile(self._base_rgba, (len(depth), 1))
-        rgba[:, 3] = far_alpha + (near_alpha - far_alpha) * (1.0 - t) ** self._gamma
+        rgba[:, 3] = (
+            far_alpha + (near_alpha - far_alpha) * (1.0 - t) ** self._gamma
+        ) * self._alpha_scale
         return rgba
+
+    def set_alpha_scale(self, scale: npt.NDArray[np.float64]) -> None:
+        """Set a per-label alpha multiplier.
+
+        Args:
+            scale: (N,) array of multipliers in [0, 1].
+        """
+        self._alpha_scale = scale
 
     def set_positions(self, positions: npt.NDArray[np.float64]) -> None:
         """Replace the 3D anchor points.
@@ -175,6 +186,7 @@ class EdgeCollection3D(Line3DCollection):
         self._gamma: float = gamma
         self._midpoints: npt.NDArray[np.float64] = segments.mean(axis=1)
         self._length_weights: npt.NDArray[np.float64] = np.ones(len(segments))
+        self._alpha_scale: npt.NDArray[np.float64] = np.ones(len(segments))
 
     def set_geometry(self, segments: npt.NDArray[np.float64]) -> None:
         """Recompute midpoints and length weights from new segments.
@@ -191,6 +203,14 @@ class EdgeCollection3D(Line3DCollection):
         normalized = (lengths - lengths.min()) / span
         self._length_weights = 1.0 - self._length_falloff * normalized
 
+    def set_alpha_scale(self, scale: npt.NDArray[np.float64]) -> None:
+        """Set a per-edge alpha multiplier.
+
+        Args:
+            scale: (E,) array of multipliers in [0, 1].
+        """
+        self._alpha_scale = scale
+
     def do_3d_projection(self) -> float:
         minz = super().do_3d_projection()
 
@@ -206,7 +226,12 @@ class EdgeCollection3D(Line3DCollection):
         depth_weight = far_alpha + (near_alpha - far_alpha) * (1.0 - t) ** self._gamma
 
         rgba = np.tile(np.append(self._base_rgb, 1.0), (len(depth), 1))
-        rgba[:, 3] = self._base_alpha * self._length_weights * depth_weight
+        rgba[:, 3] = (
+            self._base_alpha
+            * self._length_weights
+            * depth_weight
+            * self._alpha_scale
+        )
         self.set_color(rgba)
         return minz
 
@@ -277,6 +302,7 @@ class GraphView:
         if is_3d:
             node_colors = np.tile(to_rgba(COLOR_INK, INK_NODE), (n, 1))
             node_colors[self._accent_mask] = to_rgba(COLOR_ACCENT, ACCENT_NODE)
+            self._node_colors: npt.NDArray[np.float64] = node_colors
             self._scatter: Path3DCollection = ax.scatter(
                 self._pos[:, 0],
                 self._pos[:, 1],
@@ -459,3 +485,29 @@ class GraphView:
         if self._halo is not None:
             return (*artists, self._halo)
         return artists
+
+    def set_alpha_scale(self, scale: npt.NDArray[np.float64]) -> None:
+        """Apply a per-node alpha multiplier to nodes, halos and edges.
+
+        Edge alpha uses the product of its two endpoint scales, so an edge fades
+        out when either end does.
+
+        Args:
+            scale: (N,) array of multipliers in [0, 1], one per node.
+        """
+        if not self._is_3d:
+            return
+
+        colors = self._node_colors.copy()
+        colors[:, 3] *= scale
+        self._scatter._facecolor3d = colors
+
+        halo_colors = np.tile(
+            to_rgba(COLOR_ACCENT, ACCENT_HALO), (self._accent_mask.sum(), 1)
+        )
+        halo_colors[:, 3] *= scale[self._accent_mask]
+        self._halo._edgecolor3d = halo_colors
+
+        edge_scale = scale[self._edge_idx[:, 0]] * scale[self._edge_idx[:, 1]]
+        self._edge_lines.set_alpha_scale(edge_scale)
+        self._label_collection.set_alpha_scale(scale)

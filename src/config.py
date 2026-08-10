@@ -121,6 +121,15 @@ DRIFT_SEED: int = 7
 DRIFT_HARMONICS: tuple[int, ...] = (1, 2)
 DRIFT_AMPLITUDES: tuple[float, ...] = (1.5, 0.6)
 
+# --- Node breathing -------------------------------------------------------------------
+# Each node fades out and back once per cycle, with its own whole-number cycle
+# count over the loop and its own random offset, so they do not pulse in unison.
+# Whole-number harmonics are what keep the loop seamless.
+BREATH_SEED: int = 13
+BREATH_HARMONICS: tuple[int, ...] = (1, 2, 3)
+BREATH_DUTY: float = 0.3  # Fraction of the half-cycle spent ramping.
+BREATH_FLOOR: float = 0.2  # Alpha multiplier at the dimmest point.
+
 # --- Intro clip -----------------------------------------------------------------------
 # Off for now. The convergence animation moves to a dedicated project page later.
 RENDER_INTRO: bool = False
