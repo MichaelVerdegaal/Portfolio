@@ -1,5 +1,6 @@
 """Export the looping hero orbit and its poster frame for the portfolio site."""
 
+import math
 import shutil
 from collections.abc import Callable
 from pathlib import Path
@@ -21,6 +22,8 @@ from src.layout import layout_function
 from src.mpl_utils import create_figure_3d
 
 plt.switch_backend("Agg")
+
+Camera = tuple[float, float, float]
 
 
 def _check_ffmpeg() -> None:
@@ -50,10 +53,66 @@ def build_scene() -> tuple[Figure, Axes3D, GraphView]:
     return fig, ax, view
 
 
+def loop_azim(frame: int) -> float:
+    """Azimuth oscillating around AZIM0, one cycle per loop.
+
+    Args:
+        frame: Frame index within the loop clip.
+
+    Returns:
+        The camera azimuth in degrees.
+    """
+    t = frame / config.LOOP_FRAMES
+    return config.AZIM0 + config.AZIM_AMPLITUDE * math.sin(2 * math.pi * t)
+
+
+def loop_elev(frame: int) -> float:
+    """Elevation built from a first and third harmonic.
+
+    The third harmonic and the phase offset keep the vertical motion from
+    reading as a metronome synchronised with the azimuth sweep.
+
+    Args:
+        frame: Frame index within the loop clip.
+
+    Returns:
+        The camera elevation in degrees.
+    """
+    t = frame / config.LOOP_FRAMES
+    return (
+        config.ELEV0
+        + config.ELEV_AMPLITUDE * math.sin(2 * math.pi * t + config.ELEV_PHASE)
+        + config.ELEV_AMPLITUDE_3 * math.sin(2 * math.pi * 3 * t)
+    )
+
+
+def loop_roll(frame: int) -> float:
+    """Camera roll on a second harmonic.
+
+    Args:
+        frame: Frame index within the loop clip.
+
+    Returns:
+        The camera roll in degrees.
+    """
+    t = frame / config.LOOP_FRAMES
+    return config.ROLL_AMPLITUDE * math.sin(2 * math.pi * 2 * t + config.ROLL_PHASE)
+
+
+def loop_camera(frame: int) -> Camera:
+    """Full camera orientation for a loop frame.
+
+    Args:
+        frame: Frame index within the loop clip.
+
+    Returns:
+        An (elev, azim, roll) tuple in degrees.
+    """
+    return (loop_elev(frame), loop_azim(frame), loop_roll(frame))
+
+
 def intro_azim(frame: int) -> float:
     """Azimuth that lands one step before AZIM0 at the final intro frame.
-
-    Unused while config.RENDER_INTRO is False. Kept for the project page.
 
     Args:
         frame: Frame index within the intro clip.
@@ -64,16 +123,45 @@ def intro_azim(frame: int) -> float:
     return (config.AZIM0 - config.DEG_PER_FRAME * (config.INTRO_FRAMES - frame)) % 360
 
 
-def loop_azim(frame: int) -> float:
-    """Azimuth that completes exactly one turn over the loop.
+def intro_camera(frame: int) -> Camera:
+    """Camera orientation for the intro clip.
+
+    Unused while config.RENDER_INTRO is False. Kept for the project page.
 
     Args:
-        frame: Frame index within the loop clip.
+        frame: Frame index within the intro clip.
 
     Returns:
-        The camera azimuth in degrees.
+        An (elev, azim, roll) tuple in degrees.
     """
-    return (config.AZIM0 + config.DEG_PER_FRAME * frame) % 360
+    return (config.ELEV0, intro_azim(frame), 0.0)
+
+
+def drift_field(node_count: int) -> Callable[[int], NDArray[np.float64]]:
+    """Build a per-node positional drift that returns exactly to its start.
+
+    Each node gets an independent random phase and amplitude scale per
+    harmonic, so nodes wander out of step with each other while the whole
+    field still closes at frame LOOP_FRAMES.
+
+    Args:
+        node_count: Number of nodes in the graph.
+
+    Returns:
+        A function mapping a frame index to an (N, 3) offset in axis units.
+    """
+    rng = np.random.default_rng(config.DRIFT_SEED)
+    harmonics = np.array(config.DRIFT_HARMONICS, dtype=np.float64)[:, None, None]
+    shape = (len(config.DRIFT_HARMONICS), node_count, 3)
+    phases = rng.uniform(0.0, 1.0, shape)
+    scales = rng.uniform(0.4, 1.0, shape)
+    amplitudes = np.array(config.DRIFT_AMPLITUDES)[:, None, None] * scales
+
+    def offset(frame: int) -> NDArray[np.float64]:
+        t = frame / config.LOOP_FRAMES
+        return (amplitudes * np.sin(2 * np.pi * (harmonics * t + phases))).sum(axis=0)
+
+    return offset
 
 
 def render_clip(
@@ -83,7 +171,7 @@ def render_clip(
     path: Path,
     frames: int,
     pos_for: Callable[[int], NDArray[np.float64]],
-    azim_for: Callable[[int], float],
+    camera_for: Callable[[int], Camera],
 ) -> None:
     """Render a clip to MP4 in a single ffmpeg pass.
 
@@ -98,12 +186,13 @@ def render_clip(
         path: Output file path.
         frames: Number of frames to render.
         pos_for: Maps a frame index to an (N, 3) position array.
-        azim_for: Maps a frame index to a camera azimuth in degrees.
+        camera_for: Maps a frame index to an (elev, azim, roll) tuple.
     """
 
     def animate(frame: int) -> list[Artist]:
+        elev, azim, roll = camera_for(frame)
         view.pos = pos_for(frame)
-        ax.view_init(elev=config.ELEV0, azim=azim_for(frame))
+        ax.view_init(elev=elev, azim=azim, roll=roll)
         return list(view.get_artists())
 
     writer = FFMpegWriter(
@@ -116,8 +205,6 @@ def render_clip(
             str(config.CRF),
             "-preset",
             config.PRESET,
-            "-tune",
-            "animation",
             "-x264-params",
             "aq-mode=3",
             "-pix_fmt",
@@ -151,9 +238,10 @@ def save_poster(
     ax: Axes3D,
     view: GraphView,
     positions: NDArray[np.float64],
+    camera: Camera,
     path: Path,
 ) -> None:
-    """Save a WebP poster matching the first frame of the loop.
+    """Save a WebP poster matching frame 0 of the loop.
 
     The PNG is written at figure DPI and downscaled with Pillow rather than
     saved at a lower DPI directly, because the label collection bakes in
@@ -161,13 +249,15 @@ def save_poster(
 
     Args:
         fig: The figure to capture.
-        ax: The 3D axes whose camera is set to the loop start.
-        view: The GraphView whose positions are set to the converged layout.
-        positions: The (N, 3) converged layout.
+        ax: The 3D axes to orient.
+        view: The GraphView to position.
+        positions: The (N, 3) node positions at frame 0, drift included.
+        camera: The (elev, azim, roll) tuple at frame 0.
         path: Output .webp path.
     """
+    elev, azim, roll = camera
     view.pos = positions
-    ax.view_init(elev=config.ELEV0, azim=config.AZIM0)
+    ax.view_init(elev=elev, azim=azim, roll=roll)
 
     png_path = path.with_suffix(".png")
     fig.savefig(png_path, dpi=config.DPI, facecolor=config.COLOR_BG)
@@ -187,6 +277,7 @@ def main() -> None:
     fig, ax, view = build_scene()
     spawn_positions = view.pos.copy()
     final_positions = layout_function(view, is_3d=True)
+    drift = drift_field(view.graph.number_of_nodes())
 
     if config.RENDER_INTRO:
         history = tween_history(spawn_positions, final_positions, config.INTRO_FRAMES)
@@ -197,7 +288,7 @@ def main() -> None:
             config.STATIC_DIR / "hero-intro.mp4",
             config.INTRO_FRAMES,
             pos_for=lambda frame: history[min(frame, len(history) - 1)],
-            azim_for=intro_azim,
+            camera_for=intro_camera,
         )
 
     render_clip(
@@ -206,11 +297,18 @@ def main() -> None:
         view,
         config.STATIC_DIR / "hero-loop.mp4",
         config.LOOP_FRAMES,
-        pos_for=lambda _: final_positions,
-        azim_for=loop_azim,
+        pos_for=lambda frame: final_positions + drift(frame),
+        camera_for=loop_camera,
     )
 
-    save_poster(fig, ax, view, final_positions, config.STATIC_DIR / "hero-poster.webp")
+    save_poster(
+        fig,
+        ax,
+        view,
+        final_positions + drift(0),
+        loop_camera(0),
+        config.STATIC_DIR / "hero-poster.webp",
+    )
     plt.close(fig)
 
 
