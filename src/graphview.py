@@ -184,9 +184,10 @@ class EdgeCollection3D(Line3DCollection):
         self._length_falloff: float = length_falloff
         self._depth_range: tuple[float, float] = depth_range
         self._gamma: float = gamma
-        self._midpoints: npt.NDArray[np.float64] = segments.mean(axis=1)
-        self._length_weights: npt.NDArray[np.float64] = np.ones(len(segments))
         self._alpha_scale: npt.NDArray[np.float64] = np.ones(len(segments))
+        self._midpoints: npt.NDArray[np.float64]
+        self._length_weights: npt.NDArray[np.float64]
+        self.set_geometry(segments)
 
     def set_geometry(self, segments: npt.NDArray[np.float64]) -> None:
         """Recompute midpoints and length weights from new segments.
@@ -289,7 +290,8 @@ class GraphView:
         degrees = np.array([self.graph.degree(node) for node in range(n)])
         accent_count = min(ACCENT_NODE_COUNT, n)
         self._accent_mask: npt.NDArray[np.bool_] = np.zeros(n, dtype=bool)
-        self._accent_mask[np.argsort(degrees)[-accent_count:]] = True
+        if accent_count:  # A [-0:] slice would select every node, not none.
+            self._accent_mask[np.argsort(degrees)[-accent_count:]] = True
         size_rng = np.random.default_rng(SIZE_SEED)
         node_sizes = NODE_SIZE * size_rng.uniform(
             1.0 - NODE_SIZE_JITTER, 1.0 + NODE_SIZE_JITTER, n
@@ -309,6 +311,11 @@ class GraphView:
                 self._pos[:, 2],
                 s=node_sizes,
                 color=node_colors,
+                # Depth shading would fold a second, implicit alpha curve into
+                # the nodes that the halos (depthshade=False) never get, so the
+                # two would drift apart as they breathe. Edges and labels carry
+                # the depth cue explicitly instead.
+                depthshade=False,
             )
 
             halo_pos = self._pos[self._accent_mask]
@@ -498,15 +505,20 @@ class GraphView:
         if not self._is_3d:
             return
 
+        # Path3DCollection has no _facecolor3d twin the way it has _sizes3d and
+        # _linewidths3d; colours live in _facecolors and get depth-sorted on the
+        # way out of get_facecolor, so these want plain node order.
+        # Do not call set_alpha() on these collections: Collection._set_facecolor
+        # feeds self._alpha to to_rgba_array, which overwrites the alpha column.
         colors = self._node_colors.copy()
         colors[:, 3] *= scale
-        self._scatter._facecolor3d = colors
+        self._scatter.set_facecolor(colors)
 
         halo_colors = np.tile(
             to_rgba(COLOR_ACCENT, ACCENT_HALO), (self._accent_mask.sum(), 1)
         )
         halo_colors[:, 3] *= scale[self._accent_mask]
-        self._halo._edgecolor3d = halo_colors
+        self._halo.set_edgecolor(halo_colors)
 
         edge_scale = scale[self._edge_idx[:, 0]] * scale[self._edge_idx[:, 1]]
         self._edge_lines.set_alpha_scale(edge_scale)
