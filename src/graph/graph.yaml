@@ -1,35 +1,46 @@
-- Michael: [ML_Engineering, MLOps, Platform_Architect, Data_Science, AI_Engineering, Software_Engineering, Communication]
+- Michael:
+    [
+      ML Engineering,
+      MLOps,
+      Platform Architect,
+      Data Science,
+      AI Engineering,
+      Software Engineering,
+      Communication,
+    ]
 
-- ML_Engineering: [Forecasting, Computer_Vision, Model_Training, Feature_Engineering]
-- MLOps: [Deployment, Monitoring, CI_CD, Experiment_Tracking]
-- Platform_Architect: [IaC, Orchestration, System_Design]
-- Data_Science: [Time_Series_Analysis, Explainability, Model_Evaluation, Statistics]
-- AI_Engineering: [Agents, Context_Engineering, Model_Evaluation]
-- Software_Engineering: [Backend, Testing, Tooling, Visualization]
-- Communication: [Stakeholder_Management, Teaching, Reporting]
+- ML Engineering:
+    [Forecasting, Computer Vision, Model Training, Feature Engineering]
+- MLOps: [Deployment, Monitoring, CI CD, Experiment Tracking]
+- Platform Architect: [IaC, Orchestration, System Design]
+- Data Science:
+    [Time Series Analysis, Explainability, Model Evaluation, Statistics]
+- AI Engineering: [Agents, Context Engineering, Model Evaluation]
+- Software Engineering: [Backend, Testing, Tooling, Visualization]
+- Communication: [Stakeholder Management, Teaching, Reporting]
 
-- Forecasting: [Darts, PyTorch, Time_Series_Analysis]
-- Computer_Vision: [YOLO, PyTorch]
-- Model_Training: [PyTorch, Azure_ML, Docker]
-- Feature_Engineering: [Pandas, Polars, SQL]
-- Deployment: [Docker, Kubernetes, Azure_ML]
+- Forecasting: [Darts, PyTorch, Time Series Analysis]
+- Computer Vision: [YOLO, PyTorch]
+- Model Training: [PyTorch, Azure ML, Docker]
+- Feature Engineering: [Pandas, Polars, SQL]
+- Deployment: [Docker, Kubernetes, Azure ML]
 - Monitoring: [MLflow, Reporting]
-- CI_CD: [Azure_DevOps, Docker, Git, Testing]
-- Experiment_Tracking: [MLflow, Azure_ML]
+- CI CD: [Azure DevOps, Docker, Git, Testing]
+- Experiment Tracking: [MLflow, Azure ML]
 - IaC: [Bicep, Docker, Kubernetes]
-- Orchestration: [Azure_DevOps, Azure_ML, Kubernetes]
-- System_Design: [IaC, Backend]
-- Time_Series_Analysis: [Pandas, Polars, Matplotlib, Statistics]
+- Orchestration: [Azure DevOps, Azure ML, Kubernetes]
+- System Design: [IaC, Backend]
+- Time Series Analysis: [Pandas, Polars, Matplotlib, Statistics]
 - Explainability: [Matplotlib, Statistics]
-- Model_Evaluation: [MLflow, Pandas, Statistics]
+- Model Evaluation: [MLflow, Pandas, Statistics]
 - Statistics: [Pandas, Polars]
 - Agents: [Python, FastAPI, Docker]
-- Context_Engineering: [Git, Python]
+- Context Engineering: [Git, Python]
 - Backend: [FastAPI, Python, SQL]
 - Testing: [Python, Git]
 - Tooling: [UV, Git, Python, Docker]
 - Visualization: [Matplotlib, Python]
-- Stakeholder_Management: [Reporting]
+- Stakeholder Management: [Reporting]
 - Teaching: [Python, UV, Visualization]
 - Reporting: [SQL, Matplotlib]
 
@@ -40,8 +51,8 @@
 - Git
 - Pandas
 - SQL
-- Azure_ML
-- Azure_DevOps
+- Azure ML
+- Azure DevOps
 - Bicep
 - Darts
 - MLflow
