@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Michael Verdegaal - Portfolio</title>
+		<meta
+			name="description"
+			content="Michael Verdegaal - ML/AI Engineer, Software Dev and more!"
+		/>
+		<style>
+			*,
+			*::before,
+			*::after {
+				box-sizing: border-box;
+			}
+
+			body {
+				margin: 0;
+				background: #101010;
+			}
+
+			.hero {
+				position: relative;
+				width: 100%;
+				height: 100svh;
+				overflow: hidden;
+				background: #101010 url("/static/hero-poster.webp") center / cover no-repeat;
+			}
+
+			.hero__video {
+				position: absolute;
+				inset: 0;
+				width: 100%;
+				height: 100%;
+				object-fit: cover;
+				opacity: 0;
+				transition: opacity 600ms ease;
+			}
+
+			.hero__video--visible {
+				opacity: 1;
+			}
+
+			@media (prefers-reduced-motion: reduce) {
+				.hero__video {
+					display: none;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<section class="hero">
+			<video
+				class="hero__video"
+				id="hero-loop"
+				autoplay
+				muted
+				loop
+				playsinline
+				preload="auto"
+				poster="/static/hero-poster.webp"
+			>
+				<source src="/static/hero-loop.mp4" type="video/mp4" />
+			</video>
+		</section>
+
+		<script>
+			const heroVideo = document.getElementById("hero-loop");
+
+			heroVideo.addEventListener(
+				"playing",
+				() => heroVideo.classList.add("hero__video--visible"),
+				{ once: true }
+			);
+
+			// Autoplay is blocked by Windows "reduced interactivity" and by iOS low
+			// power mode. The poster is already painted on .hero, so a rejected
+			// play() needs no handling beyond not throwing.
+			heroVideo.play().catch(() => {});
+		</script>
+	</body>
+</html>

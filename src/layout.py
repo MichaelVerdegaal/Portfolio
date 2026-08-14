@@ -5,10 +5,8 @@ import numpy as np
 import numpy.typing as npt
 from fa2 import ForceAtlas2
 
+from .config import AXIS_MAX, AXIS_MIN, LAYOUT_ITERATIONS, LAYOUT_PADDING, LAYOUT_SEED
 from .graphview import GraphView
-
-AXIS_MIN = 0
-AXIS_MAX = 100
 
 
 def rescale_uniform(coords: np.ndarray, lo: float, hi: float) -> np.ndarray:
@@ -43,9 +41,15 @@ def layout_function(graph_view: GraphView, is_3d: bool) -> npt.NDArray[np.float6
     G_sparse = nx.to_scipy_sparse_array(graph_view.graph.to_undirected())
 
     fa2: ForceAtlas2 = ForceAtlas2.inferSettings(
-        G_sparse, seed=3, verbose=False, backend="vectorized", dim=3 if is_3d else 2
+        G_sparse,
+        seed=LAYOUT_SEED,
+        verbose=False,
+        backend="vectorized",
+        dim=3 if is_3d else 2,
     )
-    layout = fa2.forceatlas2(G_sparse, pos=pos, iterations=100)
+    layout = fa2.forceatlas2(G_sparse, pos=pos, iterations=LAYOUT_ITERATIONS)
 
     layout_np = np.array(layout)
-    return rescale_uniform(layout_np, AXIS_MIN + 3, AXIS_MAX - 3)
+    return rescale_uniform(
+        layout_np, AXIS_MIN + LAYOUT_PADDING, AXIS_MAX - LAYOUT_PADDING
+    )
