@@ -1,0 +1,1 @@
+`uv run uvicorn src.app:app`
