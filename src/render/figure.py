@@ -10,7 +10,7 @@ from matplotlib.projections import register_projection
 from matplotlib.transforms import Bbox
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 
-from src.config import AXIS_MAX, AXIS_MIN, AZIM0, COLOR_BG, ELEV0, FOCAL_LENGTH, ZOOM
+from ..config import AXIS_MAX, AXIS_MIN, AZIM0, COLOR_BG, ELEV0, FOCAL_LENGTH, ZOOM
 
 # Matplotlib config
 mpl.rcParams["toolbar"] = "none"

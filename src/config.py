@@ -10,7 +10,7 @@ from pathlib import Path
 SRC_DIR: Path = Path(__file__).resolve().parent
 PROJECT_ROOT: Path = SRC_DIR.parent
 STATIC_DIR: Path = PROJECT_ROOT / "static"
-GRAPH_YAML: Path = SRC_DIR / "graph.yaml"
+GRAPH_YAML: Path = SRC_DIR / "graph" / "graph.yaml"
 
 # --- Colours --------------------------------------------------------------------------
 # Three colours. Everything drawn is one of them at a stated alpha, so there is
@@ -110,6 +110,8 @@ VIDEO_FILTERS: str = f"scale={TARGET_WIDTH}:{TARGET_HEIGHT}:flags=lanczos"
 # --- Interactive preview (main.py) ----------------------------------------------------
 PREVIEW_FPS: int = 60
 PREVIEW_SECONDS: int = 10
+PREVIEW_ELEV_ROTATIONS: float = 0.4
+PREVIEW_AZIM_ROTATIONS: float = 0.4
 
 # --- Node drift -----------------------------------------------------------------------
 # Per-node sinusoidal wander around the converged layout, in axis units (the

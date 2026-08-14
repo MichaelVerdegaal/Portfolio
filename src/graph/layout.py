@@ -5,8 +5,7 @@ import numpy as np
 import numpy.typing as npt
 from fa2 import ForceAtlas2
 
-from .config import AXIS_MAX, AXIS_MIN, LAYOUT_ITERATIONS, LAYOUT_PADDING, LAYOUT_SEED
-from .graphview import GraphView
+from ..config import AXIS_MAX, AXIS_MIN, LAYOUT_ITERATIONS, LAYOUT_PADDING, LAYOUT_SEED
 
 
 def rescale_uniform(coords: np.ndarray, lo: float, hi: float) -> np.ndarray:
@@ -27,18 +26,21 @@ def rescale_uniform(coords: np.ndarray, lo: float, hi: float) -> np.ndarray:
     return centered * scale + (lo + hi) / 2.0
 
 
-def layout_function(graph_view: GraphView, is_3d: bool) -> npt.NDArray[np.float64]:
+def layout_function(
+    graph: nx.DiGraph, pos: npt.NDArray[np.float64], is_3d: bool
+) -> npt.NDArray[np.float64]:
     """Compute a target layout for the graph using ForceAtlas2.
 
     Args:
-        graph_view: The GraphView instance containing the graph and its current positions.
+        graph: The directed graph whose topology defines the layout.
+        pos: Current (N, 2|3) node positions, used as the FA2 starting point.
         is_3d: Whether to compute a 3D layout.
 
     Returns:
         An (N, 2) | (N, 3) array of target positions for the graph nodes.
     """
-    pos = graph_view.pos.copy()
-    G_sparse = nx.to_scipy_sparse_array(graph_view.graph.to_undirected())
+    pos = pos.copy()
+    G_sparse = nx.to_scipy_sparse_array(graph.to_undirected())
 
     fa2: ForceAtlas2 = ForceAtlas2.inferSettings(
         G_sparse,
