@@ -7,7 +7,7 @@ from pathlib import Path
 from matplotlib.animation import FFMpegWriter, FuncAnimation
 from matplotlib.figure import Figure
 
-from ..config import CRF, DPI, FPS, PRESET, VIDEO_FILTERS
+from src.config import CRF, DPI, FPS, PRESET, VIDEO_FILTERS
 
 
 def check_ffmpeg() -> None:

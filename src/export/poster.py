@@ -6,7 +6,7 @@ from pathlib import Path
 from matplotlib.figure import Figure
 from PIL import Image
 
-from ..config import COLOR_BG, DPI, TARGET_HEIGHT, TARGET_WIDTH
+from src.config import COLOR_BG, DPI, TARGET_HEIGHT, TARGET_WIDTH
 
 
 def save_poster(

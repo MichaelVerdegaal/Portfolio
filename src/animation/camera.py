@@ -3,7 +3,7 @@
 import math
 from collections.abc import Callable
 
-from ..config import (
+from src.config import (
     AZIM0,
     AZIM_AMPLITUDE,
     DEG_PER_FRAME,

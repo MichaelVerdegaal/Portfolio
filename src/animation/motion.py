@@ -5,7 +5,7 @@ from collections.abc import Callable
 import numpy as np
 from numpy.typing import NDArray
 
-from ..config import (
+from src.config import (
     BREATH_DUTY,
     BREATH_FLOOR,
     BREATH_HARMONICS,

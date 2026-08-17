@@ -1,22 +1,18 @@
 """Central configuration for the portfolio graph visualiser.
 
-This module imports nothing from the rest of the package, so it is safe to
-import from anywhere without creating a cycle.
+Imports nothing from the rest of the package, so it is safe to import anywhere
+without a cycle.
 """
 
 from pathlib import Path
 
-# --- Paths ----------------------------------------------------------------------------
+# Filepaths
 SRC_DIR: Path = Path(__file__).resolve().parent
 PROJECT_ROOT: Path = SRC_DIR.parent
 STATIC_DIR: Path = PROJECT_ROOT / "static"
 GRAPH_YAML: Path = SRC_DIR / "graph" / "graph.yaml"
 
-# --- Colours --------------------------------------------------------------------------
-# Three colours. Everything drawn is one of them at a stated alpha, so there is
-# one knob per colour rather than one per element. Neither end is pure: the ink
-# is warm and the base leans very slightly green, which stops the scene reading
-# as default terminal black-on-white.
+# Color theme
 COLOR_BG: str = "#0f1010"
 COLOR_INK: str = "#f4f2ee"
 COLOR_ACCENT: str = "#ff8f40"
@@ -29,29 +25,29 @@ INK_EDGE: float = 0.30
 ACCENT_NODE: float = 0.95
 ACCENT_HALO: float = 0.16
 
-# Label depth falloff. Alpha is far + (near - far) * (1 - t) ** gamma, where t
-# runs 0 at the nearest label to 1 at the furthest. Gamma above 1 pulls the
-# curve down early, so mid-depth labels recede instead of sitting at the midpoint.
+# Label depth falloff. Alpha = far + (near - far) * (1 - t) ** gamma, with t
+# from 0 at the nearest label to 1 at the furthest. Gamma > 1 fades mid-depth
+# labels early instead of leaving them at the midpoint.
 LABEL_ALPHA_NEAR: float = 1.0
 LABEL_ALPHA_FAR: float = 0.08
 LABEL_FADE_GAMMA: float = 2.2
 
-# Edge falloff. Alpha is INK_EDGE * length_weight * depth_weight. The length
-# weight runs from 1 at the shortest edge to (1 - EDGE_LENGTH_FALLOFF) at the
-# longest; the depth weight uses the same curve shape as the labels.
+# Edge falloff. Alpha = INK_EDGE * length_weight * depth_weight. Length weight
+# runs 1 at the shortest edge to (1 - EDGE_LENGTH_FALLOFF) at the longest; depth
+# weight uses the same curve as the labels.
 EDGE_LENGTH_FALLOFF: float = 0.75
 EDGE_ALPHA_NEAR: float = 1.0
 EDGE_ALPHA_FAR: float = 0.15
 EDGE_FADE_GAMMA: float = 1.6
 
-# Node emphasis. The highest-degree nodes are drawn in accent with a faint ring;
-# everything else is dim ink. The ring is a stroked circle rather than a glow.
+# Node emphasis. Highest-degree nodes are accent with a faint ring; the rest are
+# dim ink.
 ACCENT_NODE_COUNT: int = 10
 NODE_SIZE: float = 36.0
 HALO_SIZE: float = 220.0
 HALO_LINEWIDTH: float = 1.0
 
-# Per-node size variation. Accent nodes receive a separate fixed scale.
+# Per-node size variation. Accent nodes get a separate fixed scale.
 SIZE_SEED: int = 11
 NODE_SIZE_JITTER: float = 0.3  # Per-node scale is uniform in 1 +/- this.
 ACCENT_SIZE_SCALE: float = 1.4
@@ -67,7 +63,7 @@ SPAWN_MARGIN: int = 10
 RNG_SEED: int = 3
 LAYOUT_SEED: int = 3
 LAYOUT_ITERATIONS: int = 100
-LAYOUT_PADDING: int = 3  # Inset from the axis bounds for the converged layout.
+LAYOUT_PADDING: int = 3  # Inset from the axis bounds.
 
 # --- Camera ---------------------------------------------------------------------------
 ELEV0: float = 30.0
@@ -76,9 +72,9 @@ ZOOM: float = 1.4
 FOCAL_LENGTH: float = 0.25
 
 # --- Camera motion --------------------------------------------------------------------
-# Every term is sin(2*pi * k * t + phase) with a whole-number k, so the loop closes
-# in both position and velocity. Amplitudes are in degrees. Raising any of these
-# blurs the labels; re-run the motion probe before you do.
+# Each term is sin(2*pi * k * t + phase) with whole-number k, so the loop closes
+# in position and velocity. Amplitudes in degrees. Raising any of these blurs the
+# labels; re-run the motion probe first.
 AZIM_AMPLITUDE: float = 16.0  # Sweeps AZIM0 +/- this, one cycle per loop.
 ELEV_AMPLITUDE: float = 7.0  # First harmonic.
 ELEV_AMPLITUDE_3: float = 2.0  # Third harmonic, breaks the metronome feel.
@@ -87,11 +83,10 @@ ROLL_AMPLITUDE: float = 2.0  # Second harmonic. Small on purpose.
 ROLL_PHASE: float = 0.6
 
 # --- Render geometry ------------------------------------------------------------------
-# FIGSIZE is the layout knob and DPI is the resolution knob. An element's size
-# relative to the frame is size_pt / (72 * FIGSIZE[0]), so changing FIGSIZE
-# rescales everything in the scene, while changing DPI only adds pixels.
-# Raise DPI to sharpen. Do not touch FIGSIZE.
-# 19.2 * 250 = 4800 and 10.8 * 250 = 2700, a 1.875x supersample of the target.
+# FIGSIZE is the layout knob, DPI the resolution knob. Element size relative to
+# the frame is size_pt / (72 * FIGSIZE[0]): FIGSIZE rescales the whole scene, DPI
+# only adds pixels. Raise DPI to sharpen, do not touch FIGSIZE.
+# 19.2 * 250 = 4800, 10.8 * 250 = 2700: a 1.875x supersample of the target.
 FIGSIZE: tuple[float, float] = (19.2, 10.8)
 DPI: int = 250
 TARGET_WIDTH: int = 2560
@@ -114,19 +109,19 @@ PREVIEW_ELEV_ROTATIONS: float = 0.4
 PREVIEW_AZIM_ROTATIONS: float = 0.4
 
 # --- Node drift -----------------------------------------------------------------------
-# Per-node sinusoidal wander around the converged layout, in axis units (the
-# scene spans AXIS_MIN..AXIS_MAX). Each node gets its own random phase per
-# harmonic so they do not breathe in unison. Peak node speed is
-# sum(A_k * k) * 2*pi / ORBIT_SECONDS units per second, which is far below the
-# camera's contribution, so this is nearly free in the motion budget.
+# Per-node sinusoidal wander around the converged layout, in axis units (scene
+# spans AXIS_MIN..AXIS_MAX). Each node gets its own random phase per harmonic so
+# they do not drift in unison. Peak node speed is
+# sum(A_k * k) * 2*pi / ORBIT_SECONDS units/sec, far below the camera's, so this
+# is nearly free in the motion budget.
 DRIFT_SEED: int = 7
 DRIFT_HARMONICS: tuple[int, ...] = (1, 2)
 DRIFT_AMPLITUDES: tuple[float, ...] = (1.5, 0.6)
 
 # --- Node breathing -------------------------------------------------------------------
 # Each node fades out and back once per cycle, with its own whole-number cycle
-# count over the loop and its own random offset, so they do not pulse in unison.
-# Whole-number harmonics are what keep the loop seamless.
+# count and random offset, so they do not pulse in unison. Whole-number harmonics
+# keep the loop seamless.
 BREATH_SEED: int = 13
 BREATH_HARMONICS: tuple[int, ...] = (1, 2, 3)
 BREATH_DUTY: float = 0.3  # Fraction of the half-cycle spent ramping.

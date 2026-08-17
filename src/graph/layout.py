@@ -5,7 +5,7 @@ import numpy as np
 import numpy.typing as npt
 from fa2 import ForceAtlas2
 
-from ..config import AXIS_MAX, AXIS_MIN, LAYOUT_ITERATIONS, LAYOUT_PADDING, LAYOUT_SEED
+from src.config import AXIS_MAX, AXIS_MIN, LAYOUT_ITERATIONS, LAYOUT_PADDING, LAYOUT_SEED
 
 
 def rescale_uniform(coords: np.ndarray, lo: float, hi: float) -> np.ndarray:

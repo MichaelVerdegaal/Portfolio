@@ -4,7 +4,7 @@ from collections.abc import Iterable
 
 import yaml
 
-from ..config import GRAPH_YAML
+from src.config import GRAPH_YAML
 
 
 def load_graph_data() -> dict[str, Iterable[str]]:

@@ -7,7 +7,7 @@ from matplotlib.colors import to_rgba
 from matplotlib.path import Path
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
-from ..config import (
+from src.config import (
     COLOR_INK,
     LABEL_ALPHA_FAR,
     LABEL_ALPHA_NEAR,

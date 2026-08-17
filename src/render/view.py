@@ -14,7 +14,7 @@ from matplotlib.transforms import Affine2D
 from mpl_toolkits.mplot3d.art3d import Line3DCollection, Path3DCollection
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 
-from ..config import (
+from src.config import (
     ACCENT_HALO,
     ACCENT_NODE,
     ACCENT_NODE_COUNT,
