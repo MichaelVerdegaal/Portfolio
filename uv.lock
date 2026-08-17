@@ -543,24 +543,32 @@ wheels = [
 name = "portfolio"
 version = "1.0.0"
 source = { editable = "." }
-dependencies = [
+
+[package.dev-dependencies]
+graph = [
     { name = "fa2" },
-    { name = "fastapi" },
     { name = "matplotlib" },
     { name = "networkx" },
     { name = "numpy" },
     { name = "pyyaml" },
+]
+serve = [
+    { name = "fastapi" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.metadata]
-requires-dist = [
+
+[package.metadata.requires-dev]
+graph = [
     { name = "fa2", specifier = ">=1.1.2" },
-    { name = "fastapi", specifier = ">=0.141.1" },
     { name = "matplotlib", specifier = "==3.11.1" },
     { name = "networkx", specifier = ">=3.6.1" },
     { name = "numpy", specifier = ">=2.4.6" },
     { name = "pyyaml", specifier = ">=6.0.3" },
+]
+serve = [
+    { name = "fastapi", specifier = ">=0.141.1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0" },
 ]
 
