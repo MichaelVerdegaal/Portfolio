@@ -1,0 +1,7 @@
+:root{
+--dur-instant:0ms; /* @kind other */
+--dur-fast:80ms; /* @kind other */
+--dur-base:140ms; /* @kind other */
+--ease-out:cubic-bezier(.2,0,.3,1); /* @kind other */
+--transition-color:color var(--dur-fast) linear,background-color var(--dur-fast) linear;
+}
