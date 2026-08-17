@@ -10,10 +10,11 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 
-from . import config
 from src.animation import Camera
 from src.graph import load_graph_data
-from src.render import create_figure, GraphView
+from src.render import GraphView, create_figure
+
+from . import config
 
 
 def build_scene(

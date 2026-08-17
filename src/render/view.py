@@ -37,6 +37,7 @@ from src.config import (
     RNG_SEED,
     SIZE_SEED,
 )
+
 from .artists import EdgeCollection3D, TextPathCollection3D
 
 
