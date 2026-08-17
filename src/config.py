@@ -17,11 +17,11 @@ COLOR_BG: str = "#0f1010"
 COLOR_INK: str = "#f4f2ee"
 COLOR_ACCENT: str = "#ff8f40"
 
-# Ink alpha ramp.
+# Ink alpha ramp
 INK_NODE: float = 0.48
 INK_EDGE: float = 0.30
 
-# Accent alpha ramp.
+# Accent alpha ramp
 ACCENT_NODE: float = 0.95
 ACCENT_HALO: float = 0.16
 
@@ -56,7 +56,7 @@ ACCENT_SIZE_SCALE: float = 1.4
 COLOR_NODES: str = COLOR_ACCENT
 COLOR_EDGES: str = COLOR_INK
 
-# --- Scene bounds and layout ----------------------------------------------------------
+# Scene bounds and layout
 AXIS_MIN: int = 0
 AXIS_MAX: int = 100
 SPAWN_MARGIN: int = 10
@@ -65,16 +65,15 @@ LAYOUT_SEED: int = 3
 LAYOUT_ITERATIONS: int = 100
 LAYOUT_PADDING: int = 3  # Inset from the axis bounds.
 
-# --- Camera ---------------------------------------------------------------------------
+# Camera
 ELEV0: float = 30.0
 AZIM0: float = 100.0
 ZOOM: float = 1.4
 FOCAL_LENGTH: float = 0.25
 
-# --- Camera motion --------------------------------------------------------------------
-# Each term is sin(2*pi * k * t + phase) with whole-number k, so the loop closes
-# in position and velocity. Amplitudes in degrees. Raising any of these blurs the
-# labels; re-run the motion probe first.
+# Camera motion. Each term is sin(2*pi * k * t + phase) with whole-number k, so
+# the loop closes in position and velocity. Amplitudes in degrees. Raising any of
+# these blurs the labels; re-run the motion probe first.
 AZIM_AMPLITUDE: float = 16.0  # Sweeps AZIM0 +/- this, one cycle per loop.
 ELEV_AMPLITUDE: float = 7.0  # First harmonic.
 ELEV_AMPLITUDE_3: float = 2.0  # Third harmonic, breaks the metronome feel.
@@ -82,10 +81,9 @@ ELEV_PHASE: float = 1.1  # Radians. Desynchronises elevation from azimuth.
 ROLL_AMPLITUDE: float = 2.0  # Second harmonic. Small on purpose.
 ROLL_PHASE: float = 0.6
 
-# --- Render geometry ------------------------------------------------------------------
-# FIGSIZE is the layout knob, DPI the resolution knob. Element size relative to
-# the frame is size_pt / (72 * FIGSIZE[0]): FIGSIZE rescales the whole scene, DPI
-# only adds pixels. Raise DPI to sharpen, do not touch FIGSIZE.
+# Render geometry. FIGSIZE is the layout knob, DPI the resolution knob. Element
+# size relative to the frame is size_pt / (72 * FIGSIZE[0]): FIGSIZE rescales the
+# whole scene, DPI only adds pixels. Raise DPI to sharpen, do not touch FIGSIZE.
 # 19.2 * 250 = 4800, 10.8 * 250 = 2700: a 1.875x supersample of the target.
 FIGSIZE: tuple[float, float] = (19.2, 10.8)
 DPI: int = 250
@@ -93,7 +91,7 @@ TARGET_WIDTH: int = 2560
 TARGET_HEIGHT: int = 1440
 LABEL_FONT_SIZE: int = 10
 
-# --- Video ----------------------------------------------------------------------------
+# Video
 FPS: int = 30
 ORBIT_SECONDS: int = 30
 LOOP_FRAMES: int = FPS * ORBIT_SECONDS
@@ -102,32 +100,30 @@ CRF: int = 20
 PRESET: str = "slow"
 VIDEO_FILTERS: str = f"scale={TARGET_WIDTH}:{TARGET_HEIGHT}:flags=lanczos"
 
-# --- Interactive preview (main.py) ----------------------------------------------------
+# Interactive preview (main.py)
 PREVIEW_FPS: int = 60
 PREVIEW_SECONDS: int = 10
 PREVIEW_ELEV_ROTATIONS: float = 0.4
 PREVIEW_AZIM_ROTATIONS: float = 0.4
 
-# --- Node drift -----------------------------------------------------------------------
-# Per-node sinusoidal wander around the converged layout, in axis units (scene
-# spans AXIS_MIN..AXIS_MAX). Each node gets its own random phase per harmonic so
-# they do not drift in unison. Peak node speed is
+# Node drift. Per-node sinusoidal wander around the converged layout, in axis
+# units (scene spans AXIS_MIN..AXIS_MAX). Each node gets its own random phase per
+# harmonic so they do not drift in unison. Peak node speed is
 # sum(A_k * k) * 2*pi / ORBIT_SECONDS units/sec, far below the camera's, so this
 # is nearly free in the motion budget.
 DRIFT_SEED: int = 7
 DRIFT_HARMONICS: tuple[int, ...] = (1, 2)
 DRIFT_AMPLITUDES: tuple[float, ...] = (1.5, 0.6)
 
-# --- Node breathing -------------------------------------------------------------------
-# Each node fades out and back once per cycle, with its own whole-number cycle
-# count and random offset, so they do not pulse in unison. Whole-number harmonics
-# keep the loop seamless.
+# Node breathing. Each node fades out and back once per cycle, with its own
+# whole-number cycle count and random offset, so they do not pulse in unison.
+# Whole-number harmonics keep the loop seamless.
 BREATH_SEED: int = 13
 BREATH_HARMONICS: tuple[int, ...] = (1, 2, 3)
 BREATH_DUTY: float = 0.3  # Fraction of the half-cycle spent ramping.
 BREATH_FLOOR: float = 0.2  # Alpha multiplier at the dimmest point.
 
-# --- Intro clip -----------------------------------------------------------------------
-# Off for now. The convergence animation moves to a dedicated project page later.
+# Intro clip. Off for now; the convergence animation moves to a dedicated project
+# page later.
 RENDER_INTRO: bool = False
 INTRO_FRAMES: int = FPS * 20
