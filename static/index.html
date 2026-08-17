@@ -9,13 +9,25 @@
 			name="description"
 			content="Michael Verdegaal - ML/AI Engineer, Software Dev & Platform Architect"
 		/>
-		<link rel="preconnect" href="https://fonts.googleapis.com" />
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 		<link
-			href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap"
-			rel="stylesheet"
+			rel="preload"
+			href="/static/fonts/jetbrains-mono-latin.woff2"
+			as="font"
+			type="font/woff2"
+			crossorigin
 		/>
 		<style>
+			/* Self-hosted so the first paint doesn't wait on a Google Fonts
+			   round trip. One variable file covers weights 400 (body) and
+			   700 (title); the wght axis runs 400-800. */
+			@font-face {
+				font-family: "JetBrains Mono";
+				font-style: normal;
+				font-weight: 400 700;
+				font-display: swap;
+				src: url("/static/fonts/jetbrains-mono-latin.woff2") format("woff2");
+			}
+
 			*,
 			*::before,
 			*::after {

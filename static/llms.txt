@@ -1,0 +1,13 @@
+# Michael Verdegaal - Portfolio
+
+> Personal portfolio of Michael Verdegaal, an ML/AI Engineer, Software Developer, and Platform Architect. The site is a single hero page whose animated background is a 3D graph rendered entirely with NetworkX and Matplotlib.
+
+## Links
+
+- [GitHub](https://github.com/MichaelVerdegaal): Open-source projects and code.
+- [LinkedIn](https://www.linkedin.com/in/michael-verdegaal-2b8353164/): Professional background and experience.
+- [Portfolio source](https://github.com/MichaelVerdegaal/Portfolio): How the graph animation is built.
+
+## Contact
+
+- Email: work@mverdegaal.com
