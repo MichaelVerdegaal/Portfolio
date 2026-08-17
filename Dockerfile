@@ -6,7 +6,7 @@ ENV UV_LINK_MODE=copy
 WORKDIR /app
 
 COPY ./src .
-b
+
 RUN uv sync --group serve  --no-editable
 
 EXPOSE 8040
