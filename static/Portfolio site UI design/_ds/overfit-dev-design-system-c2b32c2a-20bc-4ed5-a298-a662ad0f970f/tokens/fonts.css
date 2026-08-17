@@ -1,5 +1,0 @@
-/* JetBrains Mono — SUBSTITUTED from Google Fonts (no font binaries were provided).
-   Replace these @font-face src URLs with self-hosted files when available. */
-@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap");
-
-@font-face{font-family:"JetBrains Mono Fallback";src:local("SF Mono"),local("Consolas"),local("Menlo");font-display:swap}
