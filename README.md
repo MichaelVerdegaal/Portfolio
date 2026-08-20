@@ -1,22 +1,15 @@
-## Local preview
+# Portfolio
 
-Preview the same static-asset configuration used in production:
-
-```sh
-npm install
-npm run dev
-```
+Personal portfolio site with a graph visualizer rendered by Python, NetworkX,
+and Matplotlib. The generated site assets live in `static/` and are served as a
+Cloudflare Workers Static Assets deployment.
 
 ## Render assets
 
 The Python project renders `hero-loop.mp4` and `hero-poster.webp` into `static/`:
 
-```sh
+```bash
 uv run python export_video.py
 ```
 
-## Deploy
-
-```sh
-npm run deploy
-```
+See [`DEPLOY.md`](DEPLOY.md) for local preview and Cloudflare deployment instructions.

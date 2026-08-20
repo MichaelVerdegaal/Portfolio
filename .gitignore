@@ -27,3 +27,6 @@ pyscript-stubs/**
 *.gif
 *.mp4
 !static/hero-loop.mp4
+
+# Node JS dependencies
+/node_modules
