@@ -4,14 +4,14 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Michael Verdegaal - Portfolio</title>
-		<link rel="icon" href="/static/favicon.ico" type="image/x-icon" />
+		<link rel="icon" href="/favicon.ico" type="image/x-icon" />
 		<meta
 			name="description"
 			content="Michael Verdegaal - ML/AI Engineer, Software Dev & Platform Architect"
 		/>
 		<link
 			rel="preload"
-			href="/static/fonts/jetbrains-mono-latin.woff2"
+			href="/fonts/jetbrains-mono-latin.woff2"
 			as="font"
 			type="font/woff2"
 			crossorigin
@@ -25,7 +25,7 @@
 				font-style: normal;
 				font-weight: 400 700;
 				font-display: swap;
-				src: url("/static/fonts/jetbrains-mono-latin.woff2") format("woff2");
+				src: url("/fonts/jetbrains-mono-latin.woff2") format("woff2");
 			}
 
 			*,
@@ -58,7 +58,7 @@
 				height: 100svh;
 				min-height: 640px;
 				overflow: hidden;
-				background: var(--bg) url("/static/hero-poster.webp") center / cover no-repeat;
+				background: var(--bg) url("/hero-poster.webp") center / cover no-repeat;
 			}
 
 			.hero__video {
@@ -220,10 +220,10 @@
 				muted
 				loop
 				playsinline
-				preload="auto"
-				poster="/static/hero-poster.webp"
+				preload="metadata"
+				poster="/hero-poster.webp"
 			>
-				<source src="/static/hero-loop.mp4" type="video/mp4" />
+				<source src="/hero-loop.mp4" type="video/mp4" />
 			</video>
 
 			<div class="hero__overlay" aria-hidden="true"></div>
