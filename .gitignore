@@ -29,4 +29,8 @@ pyscript-stubs/**
 !static/hero-loop.mp4
 
 # Node JS dependencies
+
+
+# Cloudflare deployment
 /node_modules
+.wrangler
